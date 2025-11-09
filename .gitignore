@@ -1,0 +1,14 @@
+# Ambiente virtual Python
+venv/
+__pycache__/
+*.pyc
+
+# Arquivos CSV gerados
+*.csv
+
+# Configurações do VS Code
+.vscode/
+
+# Arquivos temporários
+*.log
+.DS_Store
