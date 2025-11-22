@@ -1,112 +1,125 @@
-from cliente_crud import ClienteCRUD
+from pathlib import Path
+import sys
 import csv
-from datetime import datetime
-from collections import Counter
 
-def gerar_relatorio_por_cidade():
-    """
-    Gera relatório de clientes agrupados por cidade
-    Exporta para CSV e exibe no terminal
-    """
-    print("\n" + "="*80)
-    print(" "*20 + "RELATÓRIO DE CLIENTES POR CIDADE")
-    print("="*80 + "\n")
-    
-    # Conectar ao banco
-    crud = ClienteCRUD()
-    
-    print("📊 Coletando dados do banco...")
-    
-    # Buscar todos os clientes
-    clientes = crud.listar_todos()
-    total_clientes = len(clientes)
-    
-    print(f"✓ Total de clientes analisados: {total_clientes}\n")
-    
-    # Agrupar por cidade e estado
-    cidades_dict = {}
-    
-    for cliente in clientes:
-        cidade = cliente.endereco.get('cidade', 'Não informado')
-        estado = cliente.endereco.get('estado', 'N/A')
-        chave = f"{cidade} - {estado}"
-        
-        if chave in cidades_dict:
-            cidades_dict[chave]['quantidade'] += 1
-        else:
-            cidades_dict[chave] = {
-                'cidade': cidade,
-                'estado': estado,
-                'quantidade': 1
-            }
-    
-    # Converter para lista e ordenar por quantidade (maior para menor)
-    cidades_lista = []
-    for chave, dados in cidades_dict.items():
-        percentual = (dados['quantidade'] / total_clientes) * 100
-        cidades_lista.append({
-            'cidade': dados['cidade'],
-            'estado': dados['estado'],
-            'quantidade': dados['quantidade'],
-            'percentual': percentual
-        })
-    
-    # Ordenar por quantidade (decrescente)
-    cidades_lista.sort(key=lambda x: x['quantidade'], reverse=True)
-    
-    # Exibir no terminal (top 20)
-    print("="*80)
-    print(f"{'#':<5} {'CIDADE':<30} {'ESTADO':<8} {'CLIENTES':<12} {'%':<10}")
-    print("="*80)
-    
-    for i, cidade in enumerate(cidades_lista[:20], 1):
-        print(f"{i:<5} {cidade['cidade']:<30} {cidade['estado']:<8} "
-              f"{cidade['quantidade']:<12} {cidade['percentual']:.2f}%")
-    
-    print("="*80)
-    print(f"\nTotal de cidades diferentes: {len(cidades_lista)}")
-    
-    # Exportar para CSV
-    nome_arquivo = f"relatorio_cidades_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
-    with open(nome_arquivo, 'w', newline='', encoding='utf-8') as arquivo_csv:
-        campos = ['posicao', 'cidade', 'estado', 'quantidade_clientes', 'percentual']
-        writer = csv.DictWriter(arquivo_csv, fieldnames=campos)
-        
-        writer.writeheader()
-        
-        for i, cidade in enumerate(cidades_lista, 1):
-            writer.writerow({
-                'posicao': i,
-                'cidade': cidade['cidade'],
-                'estado': cidade['estado'],
-                'quantidade_clientes': cidade['quantidade'],
-                'percentual': f"{cidade['percentual']:.2f}%"
-            })
-    
-    print(f"\n✓ Relatório completo exportado para: {nome_arquivo}")
-    print(f"✓ Total de {len(cidades_lista)} cidades no arquivo CSV\n")
-    
-    # Estatísticas extras
-    print("="*80)
-    print("ESTATÍSTICAS ADICIONAIS:")
-    print("="*80)
-    
-    # Top 5 estados com mais clientes
-    estados_counter = Counter([c['estado'] for c in cidades_lista])
-    print("\n📍 Top 5 Estados com mais cidades representadas:")
-    for estado, qtd in estados_counter.most_common(5):
-        print(f"   {estado}: {qtd} cidades")
-    
-    # Cidade com mais clientes
-    top_cidade = cidades_lista[0]
-    print(f"\n🏆 Cidade com mais clientes:")
-    print(f"   {top_cidade['cidade']} - {top_cidade['estado']}: "
-          f"{top_cidade['quantidade']} clientes ({top_cidade['percentual']:.2f}%)")
-    
-    print("\n" + "="*80 + "\n")
-    
-    crud.fechar_conexao()
+# Garante que o diretório raiz (onde está config.py) esteja no sys.path
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config import get_collection  # type: ignore
+
+
+def gerar_relatorio_cidades():
+    """Gera relatório de clientes por cidade (interativo)."""
+    col = get_collection()
+
+    print("RELATÓRIO DE CLIENTES POR CIDADE\n")
+
+    uf_input = input("Filtrar por UF (ex: SP). Deixe em branco para todos os estados: ").strip()
+    uf_filtro = uf_input.upper()
+
+    limite_str = input("Quantas cidades exibir no terminal? (ex: 10, 50, 0 = todas) [50]: ").strip() or "50"
+    try:
+        limite = int(limite_str)
+    except ValueError:
+        print("\nValor inválido. Usando limite padrão (50).")
+        limite = 50
+
+    # ----- Monta filtro (match) -----
+    match = {}
+    if uf_filtro:
+        match["endereco.estado"] = uf_filtro  # campo correto do documento
+
+    # ----- Pipeline para o que vai aparecer no terminal (TOP N) -----
+    pipeline = []
+    if match:
+        pipeline.append({"$match": match})
+
+    pipeline.extend(
+        [
+            {
+                "$group": {
+                    "_id": {"cidade": "$endereco.cidade", "uf": "$endereco.estado"},
+                    "qtde": {"$sum": 1},
+                }
+            },
+            {"$sort": {"qtde": -1}},
+        ]
+    )
+
+    if limite > 0:
+        pipeline.append({"$limit": limite})
+
+    resultados = list(col.aggregate(pipeline))
+
+    # Total dentro do filtro (para %)
+    total_filtrado = col.count_documents(match if match else {})
+
+    if not resultados or total_filtrado == 0:
+        print("\n✗ Nenhum cliente encontrado para esse filtro.")
+        return
+
+    # ----- Impressão no terminal -----
+    if uf_filtro:
+        print(f"\n(Exibindo TOP {limite if limite > 0 else 'todas'} cidades da UF {uf_filtro})")
+        print(f"Total de clientes na UF {uf_filtro}: {total_filtrado}\n")
+    else:
+        print(f"\n(Exibindo TOP {limite if limite > 0 else 'todas'} cidades de todos os estados)")
+        print(f"Total de clientes: {total_filtrado}\n")
+
+    cabecalho = f"{'Cidade / UF':40} | {'Qtde':>7} | {'% do total':>10}"
+    print(cabecalho)
+    print("-" * len(cabecalho))
+
+    for r in resultados:
+        cidade = r["_id"]["cidade"]
+        uf = r["_id"]["uf"]
+        qtde = r["qtde"]
+        perc = (qtde / total_filtrado * 100) if total_filtrado else 0.0
+
+        nome_cidade = f"{cidade} - {uf}"
+        qtde_str = f"{qtde:,}".replace(",", ".")
+        perc_str = f"{perc:5.2f}%"
+
+        print(f"{nome_cidade:40} | {qtde_str:>7} | {perc_str:>10}")
+
+    # ----- Geração do CSV com a LISTA COMPLETA de cidades -----
+    pipeline_csv = []
+    if match:
+        pipeline_csv.append({"$match": match})
+
+    pipeline_csv.extend(
+        [
+            {
+                "$group": {
+                    "_id": {"cidade": "$endereco.cidade", "uf": "$endereco.estado"},
+                    "qtde": {"$sum": 1},
+                }
+            },
+            {"$sort": {"qtde": -1}},
+        ]
+    )
+
+    todos_resultados = list(col.aggregate(pipeline_csv))
+
+    dados_dir = ROOT / "dados"
+    dados_dir.mkdir(exist_ok=True)
+
+    csv_path = dados_dir / "clientes_por_cidade.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(["cidade", "uf", "qtde", "percentual"])
+        for r in todos_resultados:
+            cidade = r["_id"]["cidade"]
+            uf = r["_id"]["uf"]
+            qtde = r["qtde"]
+            perc = (qtde / total_filtrado * 100) if total_filtrado else 0.0
+            writer.writerow([cidade, uf, qtde, f"{perc:.2f}"])
+
+    print(f"\nArquivo CSV gerado em: {csv_path}")
+    print("Use o CSV para analisar a lista COMPLETA de cidades.\n")
+
 
 if __name__ == "__main__":
-    gerar_relatorio_por_cidade()
+    gerar_relatorio_cidades()

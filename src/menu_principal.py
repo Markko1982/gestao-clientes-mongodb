@@ -2,6 +2,8 @@ from cliente_crud import ClienteCRUD
 from cliente_model import Cliente
 import os
 from datetime import datetime
+from relatorio_faixa_etaria import gerar_relatorio_faixa_etaria
+from relatorio_cidades import gerar_relatorio_cidades
 
 def limpar_tela():
     """Limpa a tela do terminal"""
@@ -43,46 +45,117 @@ def exibir_cliente_detalhado(cliente: Cliente):
     print(f"\nData de Cadastro: {cliente.data_cadastro}")
     print("-"*70)
 
+
 def menu_buscar_cliente(crud: ClienteCRUD):
     """Menu de busca de clientes"""
+    import unicodedata
+
+    def normalizar(txt: str) -> str:
+        """Remove acentos e converte para minúsculo para comparar."""
+        if not txt:
+            return ""
+        txt = txt.strip().lower()
+        return "".join(
+            c for c in unicodedata.normalize("NFD", txt)
+            if unicodedata.category(c) != "Mn"
+        )
+
     limpar_tela()
     exibir_cabecalho()
     print("BUSCAR CLIENTE\n")
-    
-    print("1. Buscar por CPF")
-    print("2. Buscar por Nome")
+
+    print("1. Buscar por CPF (exato)")
+    print("2. Buscar por nome (contém)")
+    print("3. Buscar por cidade e estado")
     print("0. Voltar")
-    
-    opcao = input("\nEscolha uma opção: ")
-    
+
+    opcao = input("\nEscolha uma opção: ").strip()
+
+    if opcao == "0":
+        return
+
+    # --- Opção 1: CPF exato ---
     if opcao == "1":
-        cpf = input("\nDigite o CPF (apenas números): ")
+        cpf = input("\nDigite o CPF do cliente: ").strip()
         cliente = crud.buscar_por_cpf(cpf)
-        
         if cliente:
             exibir_cliente_detalhado(cliente)
         else:
             print("\n✗ Cliente não encontrado!")
         pausar()
-        
-    elif opcao == "2":
-        nome = input("\nDigite o nome (ou parte dele): ")
-        clientes = crud.buscar_por_nome(nome)
-        
-        if clientes:
-            print(f"\n✓ {len(clientes)} cliente(s) encontrado(s):\n")
-            for i, cliente in enumerate(clientes, 1):
-                print(f"{i}. {cliente.nome} | CPF: {cliente.cpf} | Status: {cliente.status}")
-            
-            print("\nDeseja ver detalhes de algum cliente?")
-            opcao_detalhe = input("Digite o número ou 0 para voltar: ")
-            
-            if opcao_detalhe.isdigit() and 0 < int(opcao_detalhe) <= len(clientes):
-                exibir_cliente_detalhado(clientes[int(opcao_detalhe) - 1])
-        else:
-            print("\n✗ Nenhum cliente encontrado!")
-        pausar()
+        return
 
+    # Carrega todos os clientes de uma vez
+    todos = crud.listar_todos(0)  # 0 = sem limite
+
+    if not todos:
+        print("\n✗ Nenhum cliente cadastrado.")
+        pausar()
+        return
+
+    # Limite de resultados
+    try:
+        limite_str = input("Quantos clientes deseja ver? (0 = todos): ").strip() or "20"
+        limite = int(limite_str)
+    except ValueError:
+        print("\nValor inválido, usando limite padrão (20).")
+        limite = 20
+
+    filtrados = []
+
+    # --- Opção 2: nome contém ---
+    if opcao == "2":
+        termo = input("\nTermo de busca no nome: ").strip()
+        if not termo:
+            print("\n✗ Termo de busca vazio.")
+            pausar()
+            return
+
+        termo_norm = normalizar(termo)
+        for c in todos:
+            if termo_norm in normalizar(c.nome):
+                filtrados.append(c)
+
+    # --- Opção 3: cidade/UF ---
+    elif opcao == "3":
+        print("\nBuscar por cidade e estado (deixe em branco para não filtrar por um campo):")
+        cidade_in = input("Cidade: ").strip()
+        uf_in = input("UF (ex: SP): ").strip()
+
+        cidade_norm = normalizar(cidade_in)
+        uf_norm = normalizar(uf_in)
+
+        for c in todos:
+            end = c.endereco or {}
+            cidade_cli = normalizar(end.get("cidade", ""))
+            uf_cli = normalizar(end.get("estado", "") or end.get("uf", ""))
+
+            if cidade_norm and cidade_norm not in cidade_cli:
+                continue
+            if uf_norm and uf_norm != uf_cli:
+                continue
+            filtrados.append(c)
+
+    else:
+        print("\n✗ Opção inválida.")
+        pausar()
+        return
+
+    # Aplica limite e exibe
+    if limite > 0:
+        filtrados = filtrados[:limite]
+
+    if filtrados:
+        print(f"\n✓ {len(filtrados)} cliente(s) encontrado(s):\n")
+        for i, cliente in enumerate(filtrados, 1):
+            end = cliente.endereco or {}
+            cidade_cli = end.get("cidade", "")
+            uf_cli = end.get("estado", "") or end.get("uf", "")
+            print(f"{i}. {cliente.nome} | CPF: {cliente.cpf} | Cidade: {cidade_cli} - {uf_cli} | Status: {cliente.status}")
+    else:
+        print("\n✗ Nenhum cliente encontrado com esses filtros.")
+
+    pausar()
 def menu_cadastrar_cliente(crud: ClienteCRUD):
     """Menu de cadastro de novo cliente"""
     limpar_tela()
@@ -206,15 +279,21 @@ def menu_listar_clientes(crud: ClienteCRUD):
     opcao = input("\nEscolha uma opção: ")
     
     limite = int(input("Quantos clientes deseja ver? (0 = todos): "))
-    
+
+    # Busca todos os clientes e só depois aplica filtro/limite
+    todos = crud.listar_todos(0)
+
     if opcao == "1":
-        clientes = crud.listar_todos(limite)
+        clientes = todos
     elif opcao == "2":
-        clientes = [c for c in crud.listar_todos(limite) if c.status == "ativo"]
+        clientes = [c for c in todos if c.status == "ativo"]
     elif opcao == "3":
-        clientes = [c for c in crud.listar_todos(limite) if c.status == "inativo"]
+        clientes = [c for c in todos if c.status == "inativo"]
     else:
         return
+
+    if limite > 0:
+        clientes = clientes[:limite]
     
     if clientes:
         print(f"\n✓ {len(clientes)} cliente(s) encontrado(s):\n")
@@ -256,6 +335,8 @@ def menu_principal():
         print("5. Inativar Cliente")
         print("6. Deletar Cliente")
         print("7. Estatísticas")
+        print("8. Relatório por faixa etária")
+        print("9. Relatório por cidades")
         print("0. Sair")
         
         opcao = input("\nEscolha uma opção: ")
@@ -280,6 +361,12 @@ def menu_principal():
             pausar()
         elif opcao == "7":
             menu_estatisticas(crud)
+        elif opcao == "8":
+            gerar_relatorio_faixa_etaria()
+            pausar()
+        elif opcao == "9":
+            gerar_relatorio_cidades()
+            pausar()
         elif opcao == "0":
             print("\n✓ Encerrando sistema...")
             crud.fechar_conexao()
