@@ -12,3 +12,4 @@ __pycache__/
 # Arquivos temporários
 *.log
 .DS_Store
+.env
