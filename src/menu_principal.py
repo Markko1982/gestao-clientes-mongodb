@@ -280,8 +280,13 @@ def menu_listar_clientes(crud: ClienteCRUD):
     print("0. Voltar")
     
     opcao = input("\nEscolha uma opção: ")
-    
-    limite = int(input("Quantos clientes deseja ver? (0 = todos): "))
+
+    try:
+        limite_str = input("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ").strip()
+        limite = int(limite_str) if limite_str else 20
+    except ValueError:
+        print("\nValor inválido, usando limite padrão (20).")
+        limite = 20
 
     # Busca todos os clientes e só depois aplica filtro/limite
     todos = crud.listar_todos(0)
