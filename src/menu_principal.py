@@ -325,15 +325,19 @@ def menu_estatisticas(crud: ClienteCRUD):
     limpar_tela()
     exibir_cabecalho()
     print("ESTATÍSTICAS DO SISTEMA\n")
-    
+
     total = crud.contar_clientes()
     ativos = crud.contar_clientes({"status": "ativo"})
     inativos = crud.contar_clientes({"status": "inativo"})
-    
+
     print(f"📊 Total de clientes: {total}")
-    print(f"✓ Clientes ativos: {ativos} ({ativos/total*100:.1f}%)")
-    print(f"✗ Clientes inativos: {inativos} ({inativos/total*100:.1f}%)")
-    
+
+    if total == 0:
+        print("Nenhum cliente cadastrado ainda.")
+    else:
+        print(f"✓ Clientes ativos: {ativos} ({ativos/total*100:.1f}%)")
+        print(f"✗ Clientes inativos: {inativos} ({inativos/total*100:.1f}%)")
+
     pausar()
 
 def menu_principal():
