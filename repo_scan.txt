@@ -1,0 +1,96 @@
+# Repo overview
+## Top-level (ls -la)
+total 2176
+drwxr-xr-x 8 mds mds 131072 nov 27 21:25 .
+drwxr-xr-x 5 mds mds 131072 nov 27 21:22 ..
+-rwxr-xr-x 1 mds mds   2240 nov 19 00:42 config.py
+drwxr-xr-x 2 mds mds 131072 nov 24 21:38 dados
+-rwxr-xr-x 1 mds mds    636 nov 16 17:22 docker-compose.yml
+-rwxr-xr-x 1 mds mds    107 nov 16 17:27 .env
+drwxr-xr-x 8 mds mds 131072 nov 27 20:37 .git
+-rwxr-xr-x 1 mds mds    166 nov 27 20:36 .gitignore
+drwxr-xr-x 2 mds mds 131072 nov 16 17:23 .mongo-data
+drwxr-xr-x 2 mds mds 131072 nov 19 00:43 __pycache__
+-rwxr-xr-x 1 mds mds   4876 nov 27 20:21 README.md
+-rwxr-xr-x 1 mds mds     81 nov 16 17:41 relatorio_cidades_20251116_174116.csv
+-rwxr-xr-x 1 mds mds     81 nov 16 17:41 relatorio_cidades_20251116_174129.csv
+-rwxr-xr-x 1 mds mds     38 nov 27 21:25 repo_scan.txt
+-rwxr-xr-x 1 mds mds     15 nov 16 16:55 requirements.txt
+drwxr-xr-x 2 mds mds 131072 nov 27 21:24 scripts
+drwxr-xr-x 3 mds mds 131072 nov 24 21:24 src
+
+## Shallow tree (maxdepth=2, oculta pastas pesadas)
+.
+./.gitignore
+./README.md
+./requirements.txt
+./src
+./src/backup_banco.py
+./src/busca_por_idade.py
+./src/cliente_crud.py
+./src/cliente_model.py
+./src/conexao.py
+./src/dashboard_executivo.py
+./src/gerar_dados.py
+./src/menu_principal.py.bak
+./src/relatorio_cidades.py
+./src/relatorio_inativos.py
+./src/teste_conexao.py
+./src/__pycache__
+./src/post_setup_indices.py
+./src/relatorio_export_csv.py
+./src/debug_mongo.py
+./src/debug_inativos_campos.py
+./src/relatorio_inativos_csv.py
+./src/relatorio_faixa_etaria.py
+./src/relatorio_uf.py
+./src/menu_principal.py
+./src/gerar_clientes_cidades_reais.py
+./src/relatorio_cidade_status.py
+./config.py
+./docker-compose.yml
+./.mongo-data
+./.env
+./relatorio_cidades_20251116_174116.csv
+./relatorio_cidades_20251116_174129.csv
+./__pycache__
+./__pycache__/config.cpython-312.pyc
+./dados
+./dados/clientes_export.csv
+./dados/clientes_inativos.csv
+./dados/clientes_por_faixa_etaria.csv
+./dados/clientes_por_cidade.csv
+./dados/clientes_por_uf.csv
+./dados/clientes_por_cidade_status.csv
+./scripts
+./scripts/inspect_repo.sh
+./repo_scan.txt
+
+## MongoDB URIs encontradas
+./src/cliente_crud.py:13:    def __init__(self, uri: str = "mongodb://admin:admin123@localhost:27017/"):
+./src/conexao.py:10:        uri = "mongodb://admin:admin123@localhost:27017/"
+./src/teste_conexao.py:9:uri = os.getenv("MONGO_URI", "mongodb://admin:admin123@localhost:27017/")
+./src/post_setup_indices.py:8:MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin123@localhost:27017/")
+./config.py:12:MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin123@localhost:27017/")
+./docker-compose.yml:24:      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongo:27017/
+./.env:1:MONGO_URI=mongodb://admin:admin123@localhost:27017/
+
+## Arquivos que mencionam Mongo (pymongo, Spring Data, mongoose)
+ - ./README.md
+ - ./requirements.txt
+ - ./src/backup_banco.py
+ - ./src/cliente_crud.py
+ - ./src/cliente_model.py
+ - ./src/conexao.py
+ - ./src/teste_conexao.py
+ - ./src/post_setup_indices.py
+ - ./src/debug_mongo.py
+ - ./src/gerar_clientes_cidades_reais.py
+ - ./src/relatorio_cidade_status.py
+ - ./config.py
+ - ./scripts/inspect_repo.sh
+ - ./repo_scan.txt
+
+## docker-compose e .env
+ - docker-compose.yml
+ - .env

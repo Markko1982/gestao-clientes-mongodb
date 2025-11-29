@@ -1,70 +1,59 @@
-import os
-from pymongo import MongoClient, ASCENDING
-from dotenv import load_dotenv
+"""
+Script para garantir os índices da coleção de clientes.
 
-load_dotenv()
+Pode ser executado sempre que o ambiente subir:
 
-# Usa a mesma URI do projeto
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin123@localhost:27017/")
+    python -m src.post_setup_indices
+"""
 
+from pymongo import ASCENDING
+from pymongo.errors import PyMongoError
 
-def pick_db_and_collection(client):
-    """
-    Escolhe automaticamente o DB e a coleção de clientes.
-    - Procura por DB com 'cliente' no nome.
-    - Dentro dele, procura coleção com 'cliente' no nome.
-    """
-    prefer_db = None
-    for dbname in client.list_database_names():
-        if "cliente" in dbname.lower():
-            prefer_db = dbname
-            break
-
-    if not prefer_db:
-        # fallback se nada casar
-        prefer_db = "test"
-
-    db = client[prefer_db]
-
-    colname = None
-    names = db.list_collection_names()
-    for n in names:
-        if "cliente" in n.lower():
-            colname = n
-            break
-
-    if not colname and names:
-        colname = names[0]
-
-    if not colname:
-        print("⚠ Não encontrei coleção de clientes. Cadastre um cliente ou gere dados primeiro.")
-        return None, db
-
-    return db[colname], db
+from config import get_collection
 
 
-def main():
-    client = MongoClient(MONGO_URI)
-    col, db = pick_db_and_collection(client)
+def ensure_indexes():
+    bundle = get_collection()
+    col = bundle.collection
 
-    if not col:
-        client.close()
-        return
+    print(f"Conectado a MongoDB em DB={bundle.db.name}, coleção={col.name}")
 
-    print("DB escolhido:", db.name)
-    print("Coleção escolhida:", col.name)
+    try:
+        # Índice único em CPF (evita duplicidade de clientes)
+        col.create_index(
+            [("cpf", ASCENDING)],
+            name="cpf_1",
+            unique=True,
+        )
+        print("✓ Índice único em cpf garantido (cpf_1)")
 
-    # Índice único em CPF
-    col.create_index("cpf", unique=True)
-    print("✔ Índice único em cpf criado/garantido.")
+        # Índice para buscas por cidade + nome (relatórios e listagens ordenadas)
+        col.create_index(
+            [("endereco.cidade", ASCENDING), ("nome", ASCENDING)],
+            name="endereco.cidade_1_nome_1",
+        )
+        print("✓ Índice em endereco.cidade + nome garantido (endereco.cidade_1_nome_1)")
 
-    # Índice auxiliar para buscas por cidade + nome
-    col.create_index([("cidade", ASCENDING), ("nome", ASCENDING)])
-    print("✔ Índice em (cidade, nome) criado/garantido.")
+        # Índice para relatórios por UF + cidade
+        col.create_index(
+            [("endereco.estado", ASCENDING), ("endereco.cidade", ASCENDING)],
+            name="estado_cidade_1",
+        )
+        print("✓ Índice em endereco.estado + endereco.cidade garantido (estado_cidade_1)")
 
-    print("✅ Setup de índices concluído.")
-    client.close()
+        # Índice para consultas por status (ativos/inativos)
+        col.create_index(
+            [("status", ASCENDING)],
+            name="status_1",
+        )
+        print("✓ Índice em status garantido (status_1)")
+
+    except PyMongoError as e:
+        print(f"✗ Erro ao criar/garantir índices: {e}")
+    finally:
+        bundle.client.close()
+        print("✓ Conexão com MongoDB fechada")
 
 
 if __name__ == "__main__":
-    main()
+    ensure_indexes()

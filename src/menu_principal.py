@@ -1,9 +1,12 @@
-from cliente_crud import ClienteCRUD
-from cliente_model import Cliente
+from src.cliente_crud import ClienteCRUD
+from src.cliente_model import Cliente
 import os
 from datetime import datetime
-from relatorio_faixa_etaria import gerar_relatorio_faixa_etaria
-from relatorio_cidades import gerar_relatorio_cidades
+from src.relatorio_faixa_etaria import gerar_relatorio_faixa_etaria
+from src.relatorio_cidades import gerar_relatorio_cidades
+from src.dashboard_executivo import gerar_dashboard_executivo
+
+
 
 def limpar_tela():
     """Limpa a tela do terminal"""
