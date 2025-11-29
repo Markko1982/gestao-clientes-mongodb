@@ -8,6 +8,24 @@ from src.dashboard_executivo import gerar_dashboard_executivo
 
 
 
+def ler_limite(prompt: str, default: int = 20) -> int:
+    """Lê um limite numérico do usuário, aplicando default se vazio/inválido."""
+    limite_str = input(prompt).strip()
+
+    if not limite_str:
+        return default
+
+    try:
+        limite = int(limite_str)
+        if limite < 0:
+            print(f"\nValor negativo informado, usando limite padrão ({default}).")
+            return default
+        return limite
+    except ValueError:
+        print(f"\nValor inválido, usando limite padrão ({default}).")
+        return default
+
+
 def limpar_tela():
     """Limpa a tela do terminal"""
     os.system('clear' if os.name != 'nt' else 'cls')
@@ -97,12 +115,7 @@ def menu_buscar_cliente(crud: ClienteCRUD):
         return
 
     # Limite de resultados
-    try:
-        limite_str = input("Quantos clientes deseja ver? (0 = todos): ").strip() or "20"
-        limite = int(limite_str)
-    except ValueError:
-        print("\nValor inválido, usando limite padrão (20).")
-        limite = 20
+    limite = ler_limite("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ", default=20)
 
     filtrados = []
 
@@ -281,12 +294,7 @@ def menu_listar_clientes(crud: ClienteCRUD):
     
     opcao = input("\nEscolha uma opção: ")
 
-    try:
-        limite_str = input("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ").strip()
-        limite = int(limite_str) if limite_str else 20
-    except ValueError:
-        print("\nValor inválido, usando limite padrão (20).")
-        limite = 20
+    limite = ler_limite("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ", default=20)
 
     # Busca todos os clientes e só depois aplica filtro/limite
     todos = crud.listar_todos(0)
