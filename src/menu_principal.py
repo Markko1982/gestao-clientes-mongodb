@@ -371,13 +371,17 @@ def menu_principal():
             menu_listar_clientes(crud)
         elif opcao == "5":
             cpf = input("\nDigite o CPF do cliente a inativar: ")
-            crud.inativar_cliente(cpf)
+            sucesso = crud.inativar_cliente(cpf)
+            if sucesso:
+                print("\n✓ Cliente inativado com sucesso!")
             pausar()
         elif opcao == "6":
             cpf = input("\nDigite o CPF do cliente a deletar: ")
             confirmacao = input("Tem certeza? (S/N): ")
             if confirmacao.upper() == "S":
-                crud.deletar_cliente(cpf)
+                sucesso = crud.deletar_cliente(cpf)
+                if sucesso:
+                    print("\n✓ Cliente deletado com sucesso!")
             pausar()
         elif opcao == "7":
             menu_estatisticas(crud)
