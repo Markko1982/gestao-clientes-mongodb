@@ -41,6 +41,7 @@ def analise_avancada(df: pd.DataFrame) -> None:
         .size()
         .unstack(fill_value=0)
         .sort_index()
+      
     )
 
     # Garante que a coluna 'inativo' exista (caso raro de não haver inativos em algum estado)
@@ -74,9 +75,61 @@ def analise_avancada(df: pd.DataFrame) -> None:
     .reset_index(name="quantidade_inativos")
     .sort_values(by="quantidade_inativos", ascending=False)
     .head(20)
+    .reset_index(drop=True)   # índice 0..19 sem nome
 )
 
     print(top_cidades_inativos)
+
+    print("\n===== TOP 20 CIDADES POR % DE INATIVOS (mín. 50 clientes) =====")
+
+    # Tabela com contagem de ativo/inativo por estado + cidade
+    tabela_cidade_status = (
+        df
+        .groupby(["estado", "cidade"])["status"]
+        .value_counts()
+        .unstack(fill_value=0)  # vira colunas 'ativo', 'inativo'
+        .reset_index()
+    )
+
+    # Garante que as colunas exista mesmo se não houver ninguém ativo/inativo em alguma cidade
+    for col in ["ativo", "inativo"]:
+        if col not in tabela_cidade_status.columns:
+            tabela_cidade_status[col] = 0
+
+    tabela_cidade_status["total"] = (
+        tabela_cidade_status["ativo"] + tabela_cidade_status["inativo"]
+    )
+
+    # Filtra apenas cidades com um número mínimo de clientes (evita distorção)
+    MIN_CLIENTES = 20
+    tabela_filtrada = tabela_cidade_status[
+        tabela_cidade_status["total"] >= MIN_CLIENTES
+    ].copy()
+
+    tabela_filtrada["perc_inativos"] = (
+        tabela_filtrada["inativo"] / tabela_filtrada["total"] * 100
+    ).round(2)
+
+    top_cidades_perc_inativos = (
+        tabela_filtrada
+        .sort_values(by="perc_inativos", ascending=False)
+        .head(50)
+        .reset_index(drop=True)   # índice 0..19 sem nome
+    )
+
+    # Mostra só colunas relevantes na tela
+    print(
+        top_cidades_perc_inativos[
+            ["estado", "cidade", "inativo", "total", "perc_inativos"]
+        ]
+    )
+
+    # Salva CSV
+    top_cidades_perc_inativos.to_csv(
+        "backups/top_cidades_percentual_inativos_pandas.csv",
+        index=False,
+    )
+
 
 
     # ----- Salvar CSVs em backups/ -----
@@ -108,6 +161,41 @@ def analise_avancada(df: pd.DataFrame) -> None:
     "backups/top_cidades_inativos_pandas.csv",
     index=False  # salva estado, cidade e quantidade_inativos como colunas normais
 )
+
+    print("\n===== TOP 10 DOMÍNIOS DE E-MAIL =====")
+
+    # Extrai o domínio do e-mail: tudo depois do '@'
+    df_emails = df.copy()
+    df_emails["dominio_email"] = (
+        df_emails["email"]
+        .fillna("")
+        .str.strip()
+        .str.lower()
+        .str.split("@")
+        .str[-1]
+    )
+
+    # Considera apenas domínios que parecem válidos (contêm um ponto, ex: gmail.com)
+    df_emails_validos = df_emails[
+        df_emails["dominio_email"].str.contains(r"\.", regex=True)
+    ]
+
+    top_dominios_email = (
+        df_emails_validos["dominio_email"]
+        .value_counts()
+        .head(10)
+        .rename_axis("dominio")
+        .to_frame("quantidade")
+    )
+
+    print(top_dominios_email)
+
+    top_dominios_email.to_csv(
+        "backups/top_dominios_email_pandas.csv",
+        index_label="dominio",
+    )
+
+
 
 
     print("✅ Arquivos CSV gerados com sucesso em 'backups/'.")
