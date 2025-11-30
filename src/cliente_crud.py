@@ -204,3 +204,23 @@ class ClienteCRUD:
         """Fecha a conexão com o MongoDB."""
         self.cliente_mongo.close()
         print("✓ Conexão com MongoDB fechada")
+
+    def deletar_cliente(self, cpf: str) -> bool:
+        """
+        Compatibilidade com o menu principal.
+
+        Deleta fisicamente um cliente pelo CPF, delegando para deletar_por_cpf.
+        Retorna True se algum registro foi removido, False caso contrário.
+        """
+        return self.deletar_por_cpf(cpf)
+
+
+    def inativar_cliente(self, cpf: str) -> bool:
+        """
+        Marca o cliente como inativo (status = 'inativo').
+
+        Usa a lógica de atualizar_cliente para respeitar
+        o filtro de 'marcado_para_exclusao'.
+        """
+        return self.atualizar_cliente(cpf, {"status": "inativo"})
+

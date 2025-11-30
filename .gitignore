@@ -1,15 +1,26 @@
-# Ambiente virtual Python
+# Venvs
 venv/
-__pycache__/
-*.pyc
+.venv/
+*/.venv/
+*/venv/
 
-# Arquivos CSV gerados
-*.csv
-
-# Configurações do VS Code
+# VS Code
 .vscode/
 
-# Arquivos temporários
-*.log
-.DS_Store
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Arquivos de ambiente
 .env
+
+# Dados e backups grandes
+backups/
+dados/
+mongo-data/
+*.csv
+
+# Arquivos de logs
+logs/
+*.log

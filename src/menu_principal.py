@@ -7,6 +7,23 @@ from src.relatorio_cidades import gerar_relatorio_cidades
 from src.dashboard_executivo import gerar_dashboard_executivo
 
 
+def ler_limite(prompt: str, default: int = 20) -> int:
+    """Lê um limite numérico do usuário, aplicando default se vazio/inválido."""
+    limite_str = input(prompt).strip()
+
+    if not limite_str:
+        return default
+
+    try:
+        limite = int(limite_str)
+        if limite < 0:
+            print(f"\nValor negativo informado, usando limite padrão ({default}).")
+            return default
+        return limite
+    except ValueError:
+        print(f"\nValor inválido, usando limite padrão ({default}).")
+        return default
+
 
 def limpar_tela():
     """Limpa a tela do terminal"""
@@ -26,7 +43,7 @@ def exibir_cabecalho():
 def exibir_cliente_detalhado(cliente: Cliente):
     """
     Exibe todos os dados de um cliente de forma formatada
-    
+
     Args:
         cliente: Objeto Cliente a ser exibido
     """
@@ -97,12 +114,7 @@ def menu_buscar_cliente(crud: ClienteCRUD):
         return
 
     # Limite de resultados
-    try:
-        limite_str = input("Quantos clientes deseja ver? (0 = todos): ").strip() or "20"
-        limite = int(limite_str)
-    except ValueError:
-        print("\nValor inválido, usando limite padrão (20).")
-        limite = 20
+    limite = ler_limite("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ", default=20)
 
     filtrados = []
 
@@ -164,14 +176,14 @@ def menu_cadastrar_cliente(crud: ClienteCRUD):
     limpar_tela()
     exibir_cabecalho()
     print("CADASTRAR NOVO CLIENTE\n")
-    
+
     try:
         nome = input("Nome completo: ")
         cpf = input("CPF (apenas números): ")
         email = input("Email: ")
         telefone = input("Telefone (ex: (11) 98765-4321): ")
         data_nascimento = input("Data de nascimento (YYYY-MM-DD): ")
-        
+
         print("\nEndereço:")
         rua = input("  Rua: ")
         numero = input("  Número: ")
@@ -180,7 +192,7 @@ def menu_cadastrar_cliente(crud: ClienteCRUD):
         cidade = input("  Cidade: ")
         estado = input("  Estado (sigla): ")
         cep = input("  CEP: ")
-        
+
         endereco = {
             "rua": rua,
             "numero": numero,
@@ -190,7 +202,7 @@ def menu_cadastrar_cliente(crud: ClienteCRUD):
             "estado": estado,
             "cep": cep
         }
-        
+
         cliente = Cliente(
             nome=nome,
             cpf=cpf,
@@ -199,15 +211,15 @@ def menu_cadastrar_cliente(crud: ClienteCRUD):
             data_nascimento=data_nascimento,
             endereco=endereco
         )
-        
+
         if crud.criar_cliente(cliente):
             print("\n✓ Cliente cadastrado com sucesso!")
         else:
             print("\n✗ Erro ao cadastrar cliente!")
-            
+
     except Exception as e:
         print(f"\n✗ Erro: {e}")
-    
+
     pausar()
 
 def menu_atualizar_cliente(crud: ClienteCRUD):
@@ -215,28 +227,28 @@ def menu_atualizar_cliente(crud: ClienteCRUD):
     limpar_tela()
     exibir_cabecalho()
     print("ATUALIZAR CLIENTE\n")
-    
+
     cpf = input("Digite o CPF do cliente: ")
     cliente = crud.buscar_por_cpf(cpf)
-    
+
     if not cliente:
         print("\n✗ Cliente não encontrado!")
         pausar()
         return
-    
+
     exibir_cliente_detalhado(cliente)
-    
+
     print("\nO que deseja atualizar?")
     print("1. Email")
     print("2. Telefone")
     print("3. Endereço")
     print("4. Status")
     print("0. Cancelar")
-    
+
     opcao = input("\nEscolha uma opção: ")
-    
+
     novos_dados = {}
-    
+
     if opcao == "1":
         novo_email = input("Novo email: ")
         novos_dados["email"] = novo_email
@@ -262,10 +274,10 @@ def menu_atualizar_cliente(crud: ClienteCRUD):
         print("2. Inativo")
         status_opcao = input("Escolha: ")
         novos_dados["status"] = "ativo" if status_opcao == "1" else "inativo"
-    
+
     if novos_dados:
         crud.atualizar_cliente(cpf, novos_dados)
-    
+
     pausar()
 
 def menu_listar_clientes(crud: ClienteCRUD):
@@ -273,15 +285,15 @@ def menu_listar_clientes(crud: ClienteCRUD):
     limpar_tela()
     exibir_cabecalho()
     print("LISTAR CLIENTES\n")
-    
+
     print("1. Listar todos os clientes")
     print("2. Listar apenas ativos")
     print("3. Listar apenas inativos")
     print("0. Voltar")
-    
+
     opcao = input("\nEscolha uma opção: ")
-    
-    limite = int(input("Quantos clientes deseja ver? (0 = todos): "))
+
+    limite = ler_limite("Quantos clientes deseja ver? (0 = todos, ENTER = 20): ", default=20)
 
     # Busca todos os clientes e só depois aplica filtro/limite
     todos = crud.listar_todos(0)
@@ -297,14 +309,14 @@ def menu_listar_clientes(crud: ClienteCRUD):
 
     if limite > 0:
         clientes = clientes[:limite]
-    
+
     if clientes:
         print(f"\n✓ {len(clientes)} cliente(s) encontrado(s):\n")
         for i, cliente in enumerate(clientes, 1):
             print(f"{i}. {cliente.nome} | CPF: {cliente.cpf} | Status: {cliente.status}")
     else:
         print("\n✗ Nenhum cliente encontrado!")
-    
+
     pausar()
 
 def menu_estatisticas(crud: ClienteCRUD):
@@ -312,25 +324,29 @@ def menu_estatisticas(crud: ClienteCRUD):
     limpar_tela()
     exibir_cabecalho()
     print("ESTATÍSTICAS DO SISTEMA\n")
-    
+
     total = crud.contar_clientes()
     ativos = crud.contar_clientes({"status": "ativo"})
     inativos = crud.contar_clientes({"status": "inativo"})
-    
+
     print(f"📊 Total de clientes: {total}")
-    print(f"✓ Clientes ativos: {ativos} ({ativos/total*100:.1f}%)")
-    print(f"✗ Clientes inativos: {inativos} ({inativos/total*100:.1f}%)")
-    
+
+    if total == 0:
+        print("Nenhum cliente cadastrado ainda.")
+    else:
+        print(f"✓ Clientes ativos: {ativos} ({ativos/total*100:.1f}%)")
+        print(f"✗ Clientes inativos: {inativos} ({inativos/total*100:.1f}%)")
+
     pausar()
 
 def menu_principal():
     """Menu principal do sistema"""
     crud = ClienteCRUD()
-    
+
     while True:
         limpar_tela()
         exibir_cabecalho()
-        
+
         print("1. Buscar Cliente")
         print("2. Cadastrar Novo Cliente")
         print("3. Atualizar Cliente")
@@ -341,9 +357,9 @@ def menu_principal():
         print("8. Relatório por faixa etária")
         print("9. Relatório por cidades")
         print("0. Sair")
-        
+
         opcao = input("\nEscolha uma opção: ")
-        
+
         if opcao == "1":
             menu_buscar_cliente(crud)
         elif opcao == "2":
@@ -354,13 +370,17 @@ def menu_principal():
             menu_listar_clientes(crud)
         elif opcao == "5":
             cpf = input("\nDigite o CPF do cliente a inativar: ")
-            crud.inativar_cliente(cpf)
+            sucesso = crud.inativar_cliente(cpf)
+            if sucesso:
+                print("\n✓ Cliente inativado com sucesso!")
             pausar()
         elif opcao == "6":
             cpf = input("\nDigite o CPF do cliente a deletar: ")
             confirmacao = input("Tem certeza? (S/N): ")
             if confirmacao.upper() == "S":
-                crud.deletar_cliente(cpf)
+                sucesso = crud.deletar_cliente(cpf)
+                if sucesso:
+                    print("\n✓ Cliente deletado com sucesso!")
             pausar()
         elif opcao == "7":
             menu_estatisticas(crud)
