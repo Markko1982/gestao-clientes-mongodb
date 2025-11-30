@@ -63,16 +63,21 @@ def analise_avancada(df: pd.DataFrame) -> None:
     ).head(10)
     print(top_estados_inativos[["inativo", "total", "perc_inativos"]])
 
-    # ----- Top 20 cidades com mais inativos -----
     print("\n===== TOP 20 CIDADES POR NÚMERO DE INATIVOS =====")
     df_inativos = df[df["status"] == "inativo"].copy()
+
+  # Agrupa por ESTADO + CIDADE
     top_cidades_inativos = (
-        df_inativos["cidade"]
-        .value_counts()
-        .head(20)
-        .to_frame(name="quantidade_inativos")
-    )
+    df_inativos
+    .groupby(["estado", "cidade"])
+    .size()
+    .reset_index(name="quantidade_inativos")
+    .sort_values(by="quantidade_inativos", ascending=False)
+    .head(20)
+)
+
     print(top_cidades_inativos)
+
 
     # ----- Salvar CSVs em backups/ -----
     print("\nSalvando resultados em CSV na pasta 'backups'...")
@@ -100,9 +105,10 @@ def analise_avancada(df: pd.DataFrame) -> None:
 
     # 4) Top 20 cidades com maior número de inativos
     top_cidades_inativos.to_csv(
-        "backups/top_cidades_inativos_pandas.csv",
-        index_label="cidade",
-    )
+    "backups/top_cidades_inativos_pandas.csv",
+    index=False  # salva estado, cidade e quantidade_inativos como colunas normais
+)
+
 
     print("✅ Arquivos CSV gerados com sucesso em 'backups/'.")
 
