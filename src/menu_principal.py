@@ -5,6 +5,8 @@ from datetime import datetime
 from src.relatorio_faixa_etaria import gerar_relatorio_faixa_etaria
 from src.relatorio_cidades import gerar_relatorio_cidades
 from src.dashboard_executivo import gerar_dashboard_executivo
+from scripts.analise_clientes_avancada_pandas import main as analise_clientes_avancada_main
+
 
 
 def ler_limite(prompt: str, default: int = 20) -> int:
@@ -356,7 +358,9 @@ def menu_principal():
         print("7. Estatísticas")
         print("8. Relatório por faixa etária")
         print("9. Relatório por cidades")
+        print("10. Relatórios avançados (Pandas)")
         print("0. Sair")
+
 
         opcao = input("\nEscolha uma opção: ")
 
@@ -390,10 +394,15 @@ def menu_principal():
         elif opcao == "9":
             gerar_relatorio_cidades()
             pausar()
+        elif opcao == "10":
+            print("\nGerando relatórios avançados com Pandas...")
+            analise_clientes_avancada_main()
+            pausar()
         elif opcao == "0":
             print("\n✓ Encerrando sistema...")
             crud.fechar_conexao()
             break
+
         else:
             print("\n✗ Opção inválida!")
             pausar()
