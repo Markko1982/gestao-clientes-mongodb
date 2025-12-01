@@ -184,7 +184,43 @@ def menu_cadastrar_cliente(crud: ClienteCRUD):
         cpf = input("CPF (apenas números): ")
         email = input("Email: ")
         telefone = input("Telefone (ex: (11) 98765-4321): ")
-        data_nascimento = input("Data de nascimento (YYYY-MM-DD): ")
+        # ---- Data de nascimento com validação ----
+        while True:
+            data_nascimento = input("Data de nascimento (YYYY-MM-DD): ").strip()
+            try:
+                # Valida o formato AAAA-MM-DD
+                datetime.strptime(data_nascimento, "%Y-%m-%d")
+                break
+            except ValueError:
+                print("x Data inválida. Use o formato AAAA-MM-DD, por exemplo 1990-05-23.")
+
+        print("\nEndereço:")
+        rua = input("  Rua: ")
+        numero = input("  Número: ")
+        complemento = input("  Complemento (opcional): ")
+        bairro = input("  Bairro: ")
+        cidade = input("  Cidade: ")
+        estado = input("  Estado (sigla): ")
+        cep = input("  CEP: ")
+
+        endereco = {
+            "rua": rua,
+            "numero": numero,
+            "complemento": complemento,
+            "bairro": bairro,
+            "cidade": cidade,
+            "estado": estado,
+            "cep": cep,
+        }
+
+        cliente = Cliente(
+            nome=nome,
+            cpf=cpf,
+            email=email,
+            telefone=telefone,
+            data_nascimento=data_nascimento,  # usa o valor já validado
+            endereco=endereco,
+        )
 
         print("\nEndereço:")
         rua = input("  Rua: ")
@@ -245,6 +281,7 @@ def menu_atualizar_cliente(crud: ClienteCRUD):
     print("2. Telefone")
     print("3. Endereço")
     print("4. Status")
+    print("5. Data de nascimento") 
     print("0. Cancelar")
 
     opcao = input("\nEscolha uma opção: ")
@@ -276,6 +313,31 @@ def menu_atualizar_cliente(crud: ClienteCRUD):
         print("2. Inativo")
         status_opcao = input("Escolha: ")
         novos_dados["status"] = "ativo" if status_opcao == "1" else "inativo"
+
+    elif opcao == "5":
+        # Loop para permitir tentar várias vezes sem precisar recomeçar tudo
+        while True:
+            nova_data = input(
+                "Nova data de nascimento (YYYY-MM-DD) "
+                "(ENTER para cancelar): "
+            ).strip()
+
+            # ENTER em branco = desiste de alterar
+            if not nova_data:
+                print("Data de nascimento NÃO foi alterada.")
+                break
+
+            try:
+                # Valida formato da data
+                datetime.strptime(nova_data, "%Y-%m-%d")
+                novos_dados["data_nascimento"] = nova_data
+                print("✓ Data de nascimento atualizada (aguarde salvar).")
+                break
+            except ValueError:
+                print("x Data inválida. Use o formato YYYY-MM-DD (ex: 1990-05-10).")
+                # volta para o começo do while e pergunta de novo
+
+
 
     if novos_dados:
         crud.atualizar_cliente(cpf, novos_dados)
