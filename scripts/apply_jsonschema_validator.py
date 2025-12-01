@@ -37,6 +37,12 @@ def build_validator():
                     "pattern": "^[0-9]{11}$",
                     "description": "CPF com exatamente 11 dígitos numéricos.",
                 },
+
+                "data_nascimento": {
+                "bsonType": ["string", "null"],
+                "description": "Data de nascimento no formato YYYY-MM-DD ou null.",
+                "pattern": r"^\d{4}-\d{2}-\d{2}$",
+                },
                 "email": {
                     "bsonType": "string",
                     "description": "E-mail do cliente (texto simples; validação mais forte fica na aplicação).",

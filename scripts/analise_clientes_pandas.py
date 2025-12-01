@@ -27,6 +27,7 @@ def carregar_clientes_dataframe() -> pd.DataFrame:
                 "_id": 0,
                 "cpf": 1,
                 "nome": 1,
+                "data_nascimento": 1,
                 "email": 1,
                 "telefone": 1,
                 "status": 1,
@@ -41,6 +42,7 @@ def carregar_clientes_dataframe() -> pd.DataFrame:
                 {
                     "cpf": doc.get("cpf"),
                     "nome": doc.get("nome"),
+                    "data_nascimento": doc.get("data_nascimento"),
                     "email": doc.get("email"),
                     "telefone": doc.get("telefone"),
                     "status": doc.get("status"),
