@@ -34,15 +34,15 @@ def analise_avancada(df: pd.DataFrame) -> None:
     print("\nPercentual por status (%):")
     print(status_percent)
 
-    # ----- Status por estado (UF) -----
+        # ----- Status por estado (UF) -----
     print("\n===== STATUS POR ESTADO (UF) =====")
     tabela_estado_status = (
-        df.groupby(["estado", "status"])
-        .size()
-        .unstack(fill_value=0)
-        .sort_index()
-      
-    )
+            df.groupby(["estado", "status"])
+            .size()
+            .unstack(fill_value=0)
+            .sort_index()
+        
+        )
 
     # Garante que a coluna 'inativo' exista (caso raro de não haver inativos em algum estado)
     if "inativo" not in tabela_estado_status.columns:
@@ -161,6 +161,67 @@ def analise_avancada(df: pd.DataFrame) -> None:
     "backups/top_cidades_inativos_pandas.csv",
     index=False  # salva estado, cidade e quantidade_inativos como colunas normais
 )
+    
+        # Se não existe coluna 'idade', mas existe 'data_nascimento',
+    # calcula idade em anos a partir da data de nascimento.
+    if "idade" not in df.columns and "data_nascimento" in df.columns:
+        df = df.copy()
+        df["data_nascimento"] = pd.to_datetime(
+    df["data_nascimento"],
+    format="%Y-%m-%d",  # formato do nosso schema
+    errors="coerce",
+)
+
+
+        hoje = pd.Timestamp("today").normalize()
+        df["idade"] = ((hoje - df["data_nascimento"]).dt.days // 365)
+
+    
+    print("\n===== DISTRIBUIÇÃO POR FAIXA ETÁRIA =====")
+
+    if "idade" not in df.columns:
+                    print("⚠ Campo 'idade' não encontrado no DataFrame; relatório por faixa etária ignorado.")
+    else:
+                    df_idade = df.copy()
+
+                    # Garante que idade é numérico
+                    df_idade["idade"] = pd.to_numeric(df_idade["idade"], errors="coerce")
+                    df_idade = df_idade.dropna(subset=["idade"])
+                    df_idade = df_idade[df_idade["idade"] >= 0]
+
+                    # Define faixas etárias
+                    bins = [0, 18, 26, 36, 51, 66, 200]
+                    labels = ["0-17", "18-25", "26-35", "36-50", "51-65", "66+"]
+
+                    df_idade["faixa_etaria"] = pd.cut(
+                        df_idade["idade"],
+                        bins=bins,
+                        labels=labels,
+                        right=False,        # inclui o limite inferior, exclui o superior
+                        include_lowest=True,
+                    )
+
+                    # Agrupa por faixa etária
+                    tabela_faixa = (
+                        df_idade["faixa_etaria"]
+                        .value_counts()
+                        .sort_index()
+                        .rename_axis("faixa_etaria")
+                        .to_frame("quantidade")
+                    )
+
+                    total_clientes = tabela_faixa["quantidade"].sum()
+                    tabela_faixa["percentual"] = (
+                        tabela_faixa["quantidade"] / total_clientes * 100
+                    ).round(2)
+
+                    print(tabela_faixa)
+
+                    tabela_faixa.to_csv(
+                        "backups/analise_faixa_etaria_pandas.csv",
+                        index_label="faixa_etaria",
+                    )
+
 
     print("\n===== TOP 10 DOMÍNIOS DE E-MAIL =====")
 
