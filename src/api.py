@@ -200,6 +200,64 @@ def relatorio_faixa_etaria():
         "faixas": faixas,
     }
 
+@app.get("/relatorios/dominios-email")
+async def relatorio_dominios_email():
+    """
+    Retorna o top 10 de domínios de e-mail dos clientes,
+    com quantidade e percentual em relação ao total de e-mails válidos.
+    """
+    # Carrega todos os clientes em um DataFrame (reutilizando a função de scripts)
+    df = carregar_clientes_dataframe().copy()
+
+    # Garante que a coluna de e-mail existe (por segurança)
+    if "email" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="Coluna 'email' não encontrada no DataFrame de clientes."
+        )
+
+    # Limpa e-mails vazios ou nulos
+    df["email"] = df["email"].fillna("").str.strip()
+    df = df[df["email"] != ""]
+
+    if df.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum cliente com e-mail definido."
+        )
+
+    # Extrai o domínio do e-mail (parte depois do @)
+    df["dominio_email"] = (
+        df["email"]
+        .str.split("@").str[-1]
+        .str.lower()
+        .str.strip()
+    )
+
+    # Conta quantos clientes por domínio
+    contagem_dominios = df["dominio_email"].value_counts()
+
+    total_com_email = int(contagem_dominios.sum())
+    top10 = contagem_dominios.head(10)
+
+    # Monta a resposta em forma de lista de dicts
+    top_dominios = []
+    for dominio, quantidade in top10.items():
+        percentual = round(quantidade / total_com_email * 100, 2)
+        top_dominios.append(
+            {
+                "dominio": dominio,
+                "quantidade": int(quantidade),
+                "percentual": percentual,
+            }
+        )
+
+    return {
+        "mensagem": "Top domínios de e-mail calculado com sucesso.",
+        "total_clientes_com_email": total_com_email,
+        "top_dominios": top_dominios,
+    }
+
 
 @app.post("/clientes", response_model=ClienteOut, status_code=201)
 def criar_cliente(cliente: ClienteCreate):
