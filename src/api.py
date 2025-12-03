@@ -258,6 +258,98 @@ async def relatorio_dominios_email():
         "top_dominios": top_dominios,
     }
 
+@app.get("/relatorios/cidades-inativos")
+async def relatorio_cidades_inativos(
+    min_clientes: int = 50,
+    limite: int = 20,
+):
+    """
+    Retorna as cidades com maior percentual de clientes inativos.
+
+    - min_clientes: número mínimo de clientes por cidade para entrar no ranking.
+    - limite: quantidade de cidades no resultado (default: top 20).
+    """
+    # Carrega os clientes em DataFrame
+    df = carregar_clientes_dataframe().copy()
+
+    # Garante colunas necessárias
+    colunas_necessarias = {"status", "estado", "cidade"}
+    if not colunas_necessarias.issubset(df.columns):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Colunas necessárias não encontradas no DataFrame: {colunas_necessarias}",
+        )
+
+    # Preenche valores nulos
+    df["status"] = df["status"].fillna("desconhecido")
+    df["estado"] = df["estado"].fillna("(sem estado)")
+    df["cidade"] = df["cidade"].fillna("(sem cidade)")
+
+    # Tabela status por cidade/estado
+    tabela_cidade_status = (
+        df.groupby(["estado", "cidade", "status"])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Garante colunas 'ativo' e 'inativo' existindo
+    if "ativo" not in tabela_cidade_status.columns:
+        tabela_cidade_status["ativo"] = 0
+    if "inativo" not in tabela_cidade_status.columns:
+        tabela_cidade_status["inativo"] = 0
+
+    # Total por cidade e quantidade de inativos
+    tabela_cidade_status["total"] = (
+        tabela_cidade_status["ativo"] + tabela_cidade_status["inativo"]
+    )
+
+    # Filtra por mínimo de clientes
+    tabela_filtrada = tabela_cidade_status[
+        tabela_cidade_status["total"] >= min_clientes
+    ].copy()
+
+    if tabela_filtrada.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma cidade com quantidade mínima de clientes para o relatório.",
+        )
+
+    # Percentual de inativos
+    tabela_filtrada["perc_inativos"] = (
+        tabela_filtrada["inativo"] / tabela_filtrada["total"] * 100
+    ).round(2)
+
+    # Ordena por percentual de inativos (desc) e pega top N
+    top_cidades = (
+        tabela_filtrada.sort_values(
+            by="perc_inativos",
+            ascending=False,
+        )
+        .head(limite)
+        .reset_index()
+    )
+
+    # Monta a resposta
+    cidades = []
+    for _, row in top_cidades.iterrows():
+        cidades.append(
+            {
+                "estado": row["estado"],
+                "cidade": row["cidade"],
+                "inativo": int(row["inativo"]),
+                "total": int(row["total"]),
+                "perc_inativos": float(row["perc_inativos"]),
+            }
+        )
+
+    return {
+        "mensagem": "Ranking de cidades por percentual de inativos calculado com sucesso.",
+        "min_clientes": int(min_clientes),
+        "limite": int(limite),
+        "total_cidades_no_ranking": len(cidades),
+        "cidades": cidades,
+    }
+
 
 @app.post("/clientes", response_model=ClienteOut, status_code=201)
 def criar_cliente(cliente: ClienteCreate):
