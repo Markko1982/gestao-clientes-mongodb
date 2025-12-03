@@ -349,6 +349,84 @@ async def relatorio_cidades_inativos(
         "total_cidades_no_ranking": len(cidades),
         "cidades": cidades,
     }
+@app.get("/relatorios/status-por-estado")
+async def relatorio_status_por_estado(min_clientes: int = 0):
+    """
+    Retorna, por estado (UF), a quantidade de clientes ativos/inativos,
+    total e percentual em cada status.
+
+    - min_clientes: se > 0, só retorna estados com pelo menos essa quantidade de clientes.
+    """
+    df = carregar_clientes_dataframe().copy()
+
+    # Garante as colunas necessárias
+    colunas_necessarias = {"status", "estado"}
+    if not colunas_necessarias.issubset(df.columns):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Colunas necessárias não encontradas: {colunas_necessarias}",
+        )
+
+    # Limpa dados
+    df["status"] = df["status"].fillna("desconhecido").str.strip().str.lower()
+    df["estado"] = df["estado"].fillna("(sem estado)").str.strip().str.upper()
+
+    # Agrupa por estado e status
+    tabela = (
+        df.groupby(["estado", "status"])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Garante as colunas padrão
+    if "ativo" not in tabela.columns:
+        tabela["ativo"] = 0
+    if "inativo" not in tabela.columns:
+        tabela["inativo"] = 0
+
+    # Total por estado
+    tabela["total"] = tabela["ativo"] + tabela["inativo"]
+
+    # Aplica filtro de mínimo de clientes, se informado
+    if min_clientes > 0:
+        tabela = tabela[tabela["total"] >= min_clientes]
+
+    if tabela.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum estado com clientes para o critério informado.",
+        )
+
+    # Percentuais dentro de cada estado
+    tabela["perc_ativos"] = (tabela["ativo"] / tabela["total"] * 100).round(2)
+    tabela["perc_inativos"] = (tabela["inativo"] / tabela["total"] * 100).round(2)
+
+    # Ordena por total de clientes (maior primeiro)
+    tabela = tabela.sort_values(by="total", ascending=False).reset_index()
+
+    # Monta resposta
+    estados = []
+    for _, row in tabela.iterrows():
+        estados.append(
+            {
+                "estado": row["estado"],
+                "ativo": int(row["ativo"]),
+                "inativo": int(row["inativo"]),
+                "total": int(row["total"]),
+                "perc_ativos": float(row["perc_ativos"]),
+                "perc_inativos": float(row["perc_inativos"]),
+            }
+        )
+
+    total_geral = int(df.shape[0])
+
+    return {
+        "mensagem": "Status de clientes por estado calculado com sucesso.",
+        "total_geral_clientes": total_geral,
+        "min_clientes": int(min_clientes),
+        "total_estados_no_relatorio": len(estados),
+        "estados": estados,
+    }
 
 
 @app.post("/clientes", response_model=ClienteOut, status_code=201)
