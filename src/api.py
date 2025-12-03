@@ -3,7 +3,7 @@ from pymongo.collection import ReturnDocument
 import pandas as pd
 from datetime import date
 from scripts.analise_clientes_pandas import carregar_clientes_dataframe
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Query
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -110,33 +110,62 @@ def obter_cliente_por_cpf(cpf: str):
 
 @app.get("/clientes", response_model=List[ClienteOut])
 def listar_clientes(
-    skip: int = 0,
-    limit: int = 50,
-    status: Optional[str] = None,
-    cidade: Optional[str] = None,
+    status: Optional[str] = Query(
+        None,
+        pattern="^(ativo|inativo)$",
+        description="Filtrar por status do cliente (ativo ou inativo).",
+    ),
+    estado: Optional[str] = Query(
+        None,
+        min_length=2,
+        max_length=2,
+        description="Filtrar por estado (UF), ex: SP, RJ.",
+    ),
+    cidade: Optional[str] = Query(
+        None,
+        description="Filtrar por cidade (nome completo ou parcial).",
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Quantidade máxima de clientes a retornar (1-200).",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Quantidade de clientes a pular (para paginação).",
+    ),
 ):
-    """Lista clientes com paginação simples e filtros opcionais."""
+    # Filtro base: ignorar clientes marcados para exclusão (se esse campo existir)
     filtro: dict = {"marcado_para_exclusao": {"$ne": True}}
 
     if status:
-        if status not in ("ativo", "inativo"):
-            raise HTTPException(
-                status_code=400,
-                detail="Status inválido. Use 'ativo' ou 'inativo'.",
-            )
         filtro["status"] = status
 
+    if estado:
+        filtro["endereco.estado"] = estado.strip().upper()
+
     if cidade:
-        filtro["endereco.cidade"] = cidade
+        filtro["endereco.cidade"] = {
+            "$regex": cidade.strip(),
+            "$options": "i",  # case-insensitive
+        }
 
     cursor = (
         _collection.find(filtro)
-        .skip(max(skip, 0))
-        .limit(min(max(limit, 1), 100))
+        .sort("nome", 1)   # ordena por nome ascendente
+        .skip(offset)      # paginação: pula 'offset' registros
+        .limit(limit)      # pega no máximo 'limit' registros
     )
 
-    docs = list(cursor)
-    return [_doc_to_cliente_out(d) for d in docs]
+    # Aproveitar o helper que você já tem (_doc_to_cliente_out)
+    clientes: List[ClienteOut] = [
+        _doc_to_cliente_out(doc) for doc in cursor
+    ]
+
+    return clientes
+
 
 @app.get("/relatorios/faixa-etaria")
 def relatorio_faixa_etaria():
