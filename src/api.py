@@ -3,7 +3,7 @@ from pymongo.collection import ReturnDocument
 import pandas as pd
 from datetime import date
 from scripts.analise_clientes_pandas import carregar_clientes_dataframe
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Query
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -110,33 +110,62 @@ def obter_cliente_por_cpf(cpf: str):
 
 @app.get("/clientes", response_model=List[ClienteOut])
 def listar_clientes(
-    skip: int = 0,
-    limit: int = 50,
-    status: Optional[str] = None,
-    cidade: Optional[str] = None,
+    status: Optional[str] = Query(
+        None,
+        pattern="^(ativo|inativo)$",
+        description="Filtrar por status do cliente (ativo ou inativo).",
+    ),
+    estado: Optional[str] = Query(
+        None,
+        min_length=2,
+        max_length=2,
+        description="Filtrar por estado (UF), ex: SP, RJ.",
+    ),
+    cidade: Optional[str] = Query(
+        None,
+        description="Filtrar por cidade (nome completo ou parcial).",
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Quantidade máxima de clientes a retornar (1-200).",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Quantidade de clientes a pular (para paginação).",
+    ),
 ):
-    """Lista clientes com paginação simples e filtros opcionais."""
+    # Filtro base: ignorar clientes marcados para exclusão (se esse campo existir)
     filtro: dict = {"marcado_para_exclusao": {"$ne": True}}
 
     if status:
-        if status not in ("ativo", "inativo"):
-            raise HTTPException(
-                status_code=400,
-                detail="Status inválido. Use 'ativo' ou 'inativo'.",
-            )
         filtro["status"] = status
 
+    if estado:
+        filtro["endereco.estado"] = estado.strip().upper()
+
     if cidade:
-        filtro["endereco.cidade"] = cidade
+        filtro["endereco.cidade"] = {
+            "$regex": cidade.strip(),
+            "$options": "i",  # case-insensitive
+        }
 
     cursor = (
         _collection.find(filtro)
-        .skip(max(skip, 0))
-        .limit(min(max(limit, 1), 100))
+        .sort("nome", 1)   # ordena por nome ascendente
+        .skip(offset)      # paginação: pula 'offset' registros
+        .limit(limit)      # pega no máximo 'limit' registros
     )
 
-    docs = list(cursor)
-    return [_doc_to_cliente_out(d) for d in docs]
+    # Aproveitar o helper que você já tem (_doc_to_cliente_out)
+    clientes: List[ClienteOut] = [
+        _doc_to_cliente_out(doc) for doc in cursor
+    ]
+
+    return clientes
+
 
 @app.get("/relatorios/faixa-etaria")
 def relatorio_faixa_etaria():
@@ -256,6 +285,176 @@ async def relatorio_dominios_email():
         "mensagem": "Top domínios de e-mail calculado com sucesso.",
         "total_clientes_com_email": total_com_email,
         "top_dominios": top_dominios,
+    }
+
+@app.get("/relatorios/cidades-inativos")
+async def relatorio_cidades_inativos(
+    min_clientes: int = 50,
+    limite: int = 20,
+):
+    """
+    Retorna as cidades com maior percentual de clientes inativos.
+
+    - min_clientes: número mínimo de clientes por cidade para entrar no ranking.
+    - limite: quantidade de cidades no resultado (default: top 20).
+    """
+    # Carrega os clientes em DataFrame
+    df = carregar_clientes_dataframe().copy()
+
+    # Garante colunas necessárias
+    colunas_necessarias = {"status", "estado", "cidade"}
+    if not colunas_necessarias.issubset(df.columns):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Colunas necessárias não encontradas no DataFrame: {colunas_necessarias}",
+        )
+
+    # Preenche valores nulos
+    df["status"] = df["status"].fillna("desconhecido")
+    df["estado"] = df["estado"].fillna("(sem estado)")
+    df["cidade"] = df["cidade"].fillna("(sem cidade)")
+
+    # Tabela status por cidade/estado
+    tabela_cidade_status = (
+        df.groupby(["estado", "cidade", "status"])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Garante colunas 'ativo' e 'inativo' existindo
+    if "ativo" not in tabela_cidade_status.columns:
+        tabela_cidade_status["ativo"] = 0
+    if "inativo" not in tabela_cidade_status.columns:
+        tabela_cidade_status["inativo"] = 0
+
+    # Total por cidade e quantidade de inativos
+    tabela_cidade_status["total"] = (
+        tabela_cidade_status["ativo"] + tabela_cidade_status["inativo"]
+    )
+
+    # Filtra por mínimo de clientes
+    tabela_filtrada = tabela_cidade_status[
+        tabela_cidade_status["total"] >= min_clientes
+    ].copy()
+
+    if tabela_filtrada.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma cidade com quantidade mínima de clientes para o relatório.",
+        )
+
+    # Percentual de inativos
+    tabela_filtrada["perc_inativos"] = (
+        tabela_filtrada["inativo"] / tabela_filtrada["total"] * 100
+    ).round(2)
+
+    # Ordena por percentual de inativos (desc) e pega top N
+    top_cidades = (
+        tabela_filtrada.sort_values(
+            by="perc_inativos",
+            ascending=False,
+        )
+        .head(limite)
+        .reset_index()
+    )
+
+    # Monta a resposta
+    cidades = []
+    for _, row in top_cidades.iterrows():
+        cidades.append(
+            {
+                "estado": row["estado"],
+                "cidade": row["cidade"],
+                "inativo": int(row["inativo"]),
+                "total": int(row["total"]),
+                "perc_inativos": float(row["perc_inativos"]),
+            }
+        )
+
+    return {
+        "mensagem": "Ranking de cidades por percentual de inativos calculado com sucesso.",
+        "min_clientes": int(min_clientes),
+        "limite": int(limite),
+        "total_cidades_no_ranking": len(cidades),
+        "cidades": cidades,
+    }
+@app.get("/relatorios/status-por-estado")
+async def relatorio_status_por_estado(min_clientes: int = 0):
+    """
+    Retorna, por estado (UF), a quantidade de clientes ativos/inativos,
+    total e percentual em cada status.
+
+    - min_clientes: se > 0, só retorna estados com pelo menos essa quantidade de clientes.
+    """
+    df = carregar_clientes_dataframe().copy()
+
+    # Garante as colunas necessárias
+    colunas_necessarias = {"status", "estado"}
+    if not colunas_necessarias.issubset(df.columns):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Colunas necessárias não encontradas: {colunas_necessarias}",
+        )
+
+    # Limpa dados
+    df["status"] = df["status"].fillna("desconhecido").str.strip().str.lower()
+    df["estado"] = df["estado"].fillna("(sem estado)").str.strip().str.upper()
+
+    # Agrupa por estado e status
+    tabela = (
+        df.groupby(["estado", "status"])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Garante as colunas padrão
+    if "ativo" not in tabela.columns:
+        tabela["ativo"] = 0
+    if "inativo" not in tabela.columns:
+        tabela["inativo"] = 0
+
+    # Total por estado
+    tabela["total"] = tabela["ativo"] + tabela["inativo"]
+
+    # Aplica filtro de mínimo de clientes, se informado
+    if min_clientes > 0:
+        tabela = tabela[tabela["total"] >= min_clientes]
+
+    if tabela.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum estado com clientes para o critério informado.",
+        )
+
+    # Percentuais dentro de cada estado
+    tabela["perc_ativos"] = (tabela["ativo"] / tabela["total"] * 100).round(2)
+    tabela["perc_inativos"] = (tabela["inativo"] / tabela["total"] * 100).round(2)
+
+    # Ordena por total de clientes (maior primeiro)
+    tabela = tabela.sort_values(by="total", ascending=False).reset_index()
+
+    # Monta resposta
+    estados = []
+    for _, row in tabela.iterrows():
+        estados.append(
+            {
+                "estado": row["estado"],
+                "ativo": int(row["ativo"]),
+                "inativo": int(row["inativo"]),
+                "total": int(row["total"]),
+                "perc_ativos": float(row["perc_ativos"]),
+                "perc_inativos": float(row["perc_inativos"]),
+            }
+        )
+
+    total_geral = int(df.shape[0])
+
+    return {
+        "mensagem": "Status de clientes por estado calculado com sucesso.",
+        "total_geral_clientes": total_geral,
+        "min_clientes": int(min_clientes),
+        "total_estados_no_relatorio": len(estados),
+        "estados": estados,
     }
 
 
