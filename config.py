@@ -1,71 +1,76 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
 from dotenv import load_dotenv
 from pymongo import MongoClient
-import os
+from pymongo.collection import Collection
+from pymongo.database import Database
 
 
 # Diretório raiz do projeto (onde está este config.py e o .env)
 ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT / ".env")
+env_path = ROOT / ".env"
 
-# URL de conexão com o MongoDB (vem do .env ou usa padrão)
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin123@localhost:27017/")
-
-# Nome do banco e da coleção padrão
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "empresa_db")
-MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME", "clientes")
+# Carrega variáveis do .env, se existir
+if env_path.exists():
+    load_dotenv(env_path)
 
 
-def get_collection():
-    """
-    Abre conexão com o Mongo e retorna (client, db, collection)
-    usando empresa_db.clientes (ou os valores do .env, se definidos).
-    """
-    client = MongoClient(MONGO_URI)
-    db = client[MONGO_DB_NAME]
-    collection = db[MONGO_COLLECTION_NAME]
-    return client, db, collection
-# --- Helper para compatibilidade de get_collection --------------------
+def _get_env(name: str, *, default: str | None = None, required: bool = False) -> str:
+    """Lê variável de ambiente, com opção de marcar como obrigatória."""
+    value = os.getenv(name, default)
+    if required and (value is None or value == ""):
+        raise RuntimeError(
+            f"Variável de ambiente {name} não definida. "
+            f"Defina {name} no arquivo .env ou no ambiente antes de rodar a aplicação."
+        )
+    return value
+
+
+# URL de conexão com o MongoDB (OBRIGATÓRIA, sem hardcode)
+MONGO_URI: str = _get_env("MONGO_URI", required=True)
+
+# Nome do banco e da coleção padrão (podem ter default razoável)
+MONGO_DB_NAME: str = _get_env("MONGO_DB_NAME", default="empresa_db")
+MONGO_COLLECTION_CLIENTES: str = _get_env("MONGO_COLLECTION_CLIENTES", default="clientes")
+
+# Alias para compatibilidade com código antigo
+MONGO_COLLECTION_NAME: str = MONGO_COLLECTION_CLIENTES
+
+
+@dataclass
 class _CollectionBundle:
-    """Objeto que representa (client, db, collection) ao mesmo tempo.
+    """Pacote com client, db e collection principal de clientes."""
 
-    - Pode ser desempacotado:
-        client, db, col = get_collection()
-    - Pode ser usado como se fosse a própria coleção:
-        col = get_collection()
-        total = col.count_documents({})
-    """
-    def __init__(self, client, db, collection):
-        self.client = client
-        self.db = db
-        self.collection = collection
+    client: MongoClient
+    db: Database
+    collection: Collection
 
     def __iter__(self):
-        # permite: client, db, col = get_collection()
+        """Permite: client, db, col = get_collection()"""
         yield self.client
         yield self.db
         yield self.collection
 
-    def __getattr__(self, name):
-        # delega chamadas para a coleção real
-        return getattr(self.collection, name)
-
-    def __getitem__(self, idx):
-        return (self.client, self.db, self.collection)[idx]
-
-    def __len__(self):
-        return 3
-
-    def __repr__(self):
+    def __repr__(self) -> str:  # pragma: no cover - só para debug
         return f"<CollectionBundle db={self.db.name!r} collection={self.collection.name!r}>"
 
-def get_collection():
-    """Retorna um objeto compatível com o uso antigo e o novo.
 
-    - col = get_collection()
-    - client, db, col = get_collection()
+def get_collection() -> _CollectionBundle:
+    """Retorna client, db e coleção principal de clientes.
+
+    Exemplos de uso:
+
+        bundle = get_collection()
+        col = bundle.collection
+
+        client, db, col = get_collection()
     """
     client = MongoClient(MONGO_URI)
     db = client[MONGO_DB_NAME]
-    collection = db[MONGO_COLLECTION_NAME]
-    return _CollectionBundle(client, db, collection)
+    collection = db[MONGO_COLLECTION_CLIENTES]
+    return _CollectionBundle(client=client, db=db, collection=collection)

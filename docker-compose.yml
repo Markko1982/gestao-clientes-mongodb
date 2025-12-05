@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   mongo:
     image: mongo:7
@@ -10,7 +11,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
     volumes:
-      - ./.mongo-data:/data/db
+      - mongo_data:/data/db
 
   mongo-express:
     image: mongo-express:1.0.2-20
@@ -24,3 +25,19 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongo:27017/
     depends_on:
       - mongo
+
+  api:
+    build: .
+    container_name: api
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://admin:admin123@mongo:27017/
+      MONGO_DB_NAME: empresa_db
+      MONGO_COLLECTION_CLIENTES: clientes
+    ports:
+      - "8000:8000"
+
+volumes:
+  mongo_data:
