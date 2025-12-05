@@ -41,6 +41,21 @@ def ensure_indexes():
         )
         print("✓ Índice em endereco.estado + endereco.cidade garantido (estado_cidade_1)")
 
+        # Índice composto para status + UF + cidade
+        # Útil para relatórios de clientes inativos por cidade/estado direto no MongoDB
+        col.create_index(
+            [
+                ("status", ASCENDING),
+                ("endereco.estado", ASCENDING),
+                ("endereco.cidade", ASCENDING),
+            ],
+            name="status_estado_cidade_1",
+        )
+        print(
+            "✓ Índice composto status + endereco.estado + endereco.cidade garantido (status_estado_cidade_1)"
+        )
+
+
         # Índice para consultas por status (ativos/inativos)
         col.create_index(
             [("status", ASCENDING)],
