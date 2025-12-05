@@ -208,6 +208,72 @@ def relatorio_faixa_etaria():
         right=False,
     )
 
+    @app.get("/relatorios/cidades-mais-inativos")
+    def relatorio_cidades_mais_inativos(limite: int = 10):
+        """
+        Retorna as top N cidades com maior número de clientes inativos,
+        usando os dados carregados do MongoDB via Pandas.
+        """
+        # Limite de segurança para não devolver uma lista gigante
+        if limite <= 0 or limite > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Parâmetro 'limite' deve estar entre 1 e 100.",
+            )
+
+        # Carrega todos os clientes (ignorando marcados para exclusão)
+        df = carregar_clientes_dataframe()
+
+        if "status" not in df.columns:
+            raise HTTPException(
+                status_code=500,
+                detail="DataFrame não possui coluna 'status'.",
+            )
+
+        # Filtra apenas clientes inativos
+        df_inativos = df[df["status"] == "inativo"].copy()
+
+        # Caso não haja nenhum inativo, retorna resposta vazia, mas estruturada
+        if df_inativos.empty:
+            return {
+                "mensagem": "Nenhum cliente inativo encontrado.",
+                "total_inativos": 0,
+                "limite": limite,
+                "cidades": [],
+            }
+
+        # Normaliza campos de cidade/estado para evitar valores NaN
+        df_inativos["estado"] = df_inativos["estado"].fillna("(sem estado)")
+        df_inativos["cidade"] = df_inativos["cidade"].fillna("(sem cidade)")
+
+        # Agrupa por estado + cidade e conta quantos inativos há em cada combinação
+        agrupado = (
+            df_inativos
+            .groupby(["estado", "cidade"])
+            .size()
+            .reset_index(name="quantidade_inativos")
+            .sort_values(by="quantidade_inativos", ascending=False)
+        )
+
+        # Total de clientes inativos (para cálculo de percentual)
+        total_inativos = int(df_inativos.shape[0])
+
+        # Percentual de inativos daquela cidade em relação ao total de inativos
+        agrupado["percentual"] = (
+            agrupado["quantidade_inativos"] / total_inativos * 100
+        ).round(2)
+
+        # Aplica o limite e converte para lista de dicts
+        top_cidades = agrupado.head(limite).to_dict(orient="records")
+
+        return {
+            "mensagem": "Top cidades com mais clientes inativos calculado com sucesso.",
+            "total_inativos": total_inativos,
+            "limite": limite,
+            "cidades": top_cidades,
+        }
+
+
     # Contagem por faixa
     tabela = (
         df_validos["faixa_etaria"]
