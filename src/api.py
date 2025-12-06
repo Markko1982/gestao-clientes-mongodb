@@ -588,7 +588,22 @@ def criar_cliente(cliente: ClienteCreate):
 
     try:
         result = _collection.insert_one(data)
+
+        # Log de sucesso da criação do cliente
+        logger.info(
+            f"cliente_create_success cpf={cliente.cpf} status={data.get('status')}",
+            extra={
+                "event": "cliente_create_success",
+            },
+        )
     except DuplicateKeyError:
+        # Log estruturado do conflito de CPF duplicado
+        logger.warning(
+            f"cliente_create_conflict cpf={cliente.cpf}",
+            extra={
+                "event": "cliente_create_conflict",
+            },
+        )
         raise HTTPException(
             status_code=409,
             detail="Já existe um cliente cadastrado com esse CPF.",
@@ -596,44 +611,6 @@ def criar_cliente(cliente: ClienteCreate):
 
     doc = _collection.find_one({"_id": result.inserted_id})
     return _doc_to_cliente_out(doc)
-
-
-
-@app.patch("/clientes/{cpf}", response_model=ClienteOut)
-def atualizar_cliente(cpf: str, dados: ClienteUpdate):
-    """Atualiza parcialmente um cliente pelo CPF (patch)."""
-
-    # Monta só os campos que o usuário enviou
-    campos_para_atualizar = dados.model_dump(exclude_unset=True)
-
-    if not campos_para_atualizar:
-        raise HTTPException(
-            status_code=400,
-            detail="Nenhum dado enviado para atualização."
-        )
-
-    # Faz o update e já pede o documento atualizado de volta
-    doc_atualizado = _collection.find_one_and_update(
-        {"cpf": cpf},
-        {"$set": campos_para_atualizar},
-        return_document=ReturnDocument.AFTER,
-    )
-
-    if not doc_atualizado:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-
-    # 🔴 IMPORTANTE: converter do formato Mongo para o formato da API
-    # (id como string, não expor _id bruto)
-    return {
-        "id": str(doc_atualizado["_id"]),
-        "cpf": doc_atualizado["cpf"],
-        "nome": doc_atualizado["nome"],
-        "email": doc_atualizado.get("email"),
-        "telefone": doc_atualizado.get("telefone"),
-        "status": doc_atualizado.get("status"),
-        "endereco": doc_atualizado.get("endereco"),
-        "data_nascimento": doc_atualizado.get("data_nascimento"),
-    }
 
 
 @app.delete("/clientes/{cpf}", status_code=204)
