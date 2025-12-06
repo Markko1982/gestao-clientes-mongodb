@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from logging_config import get_logger
 
 
 # Diretório raiz do projeto (onde está este config.py e o .env)
@@ -40,6 +41,8 @@ MONGO_COLLECTION_CLIENTES: str = _get_env("MONGO_COLLECTION_CLIENTES", default="
 
 # Alias para compatibilidade com código antigo
 MONGO_COLLECTION_NAME: str = MONGO_COLLECTION_CLIENTES
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -73,4 +76,15 @@ def get_collection() -> _CollectionBundle:
     client = MongoClient(MONGO_URI)
     db = client[MONGO_DB_NAME]
     collection = db[MONGO_COLLECTION_CLIENTES]
+
+    # Log estruturado da criação da conexão (sem expor URI)
+    logger.info(
+        "MongoDB connection created",
+        extra={
+            "event": "mongo_connection_created",
+            "database": MONGO_DB_NAME,
+            "collection": MONGO_COLLECTION_CLIENTES,
+        },
+    )
+
     return _CollectionBundle(client=client, db=db, collection=collection)
