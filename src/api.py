@@ -154,12 +154,25 @@ def health_check():
 
 @app.get("/clientes/{cpf}", response_model=ClienteOut)
 def obter_cliente_por_cpf(cpf: str):
-    """Busca um cliente pelo CPF (11 dígitos)."""
-    doc = _collection.find_one(
-        {"cpf": cpf, "marcado_para_exclusao": {"$ne": True}}
-    )
+    """Obtém um cliente pelo CPF."""
+    doc = _collection.find_one({"cpf": cpf})
+
     if not doc:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        # Log estruturado quando não encontra o cliente
+        logger.warning(
+            f"cliente_get_not_found cpf={cpf}",
+            extra={"event": "cliente_get_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Log estruturado de sucesso na busca
+    logger.info(
+        f"cliente_get_success cpf={cpf}",
+        extra={"event": "cliente_get_success"},
+    )
     return _doc_to_cliente_out(doc)
 
 
