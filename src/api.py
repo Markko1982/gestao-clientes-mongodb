@@ -154,12 +154,25 @@ def health_check():
 
 @app.get("/clientes/{cpf}", response_model=ClienteOut)
 def obter_cliente_por_cpf(cpf: str):
-    """Busca um cliente pelo CPF (11 dígitos)."""
-    doc = _collection.find_one(
-        {"cpf": cpf, "marcado_para_exclusao": {"$ne": True}}
-    )
+    """Obtém um cliente pelo CPF."""
+    doc = _collection.find_one({"cpf": cpf})
+
     if not doc:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        # Log estruturado quando não encontra o cliente
+        logger.warning(
+            f"cliente_get_not_found cpf={cpf}",
+            extra={"event": "cliente_get_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Log estruturado de sucesso na busca
+    logger.info(
+        f"cliente_get_success cpf={cpf}",
+        extra={"event": "cliente_get_success"},
+    )
     return _doc_to_cliente_out(doc)
 
 
@@ -611,6 +624,52 @@ def criar_cliente(cliente: ClienteCreate):
 
     doc = _collection.find_one({"_id": result.inserted_id})
     return _doc_to_cliente_out(doc)
+
+
+@app.patch("/clientes/{cpf}", response_model=ClienteOut)
+def atualizar_cliente(cpf: str, cliente_update: ClienteUpdate):
+    """Atualiza parcialmente um cliente pelo CPF."""
+    # Monta apenas os campos enviados no corpo da requisição
+    update_data = cliente_update.model_dump(exclude_unset=True)
+
+    if not update_data:
+        # Nada foi enviado para atualizar
+        logger.info(
+            f"cliente_update_no_fields cpf={cpf}",
+            extra={"event": "cliente_update_no_fields"},
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Nenhum dado enviado para atualização.",
+        )
+
+    # Executa o update e já retorna o documento atualizado
+    updated_doc = _collection.find_one_and_update(
+        {"cpf": cpf},
+        {"$set": update_data},
+        return_document=ReturnDocument.AFTER,
+    )
+
+    if not updated_doc:
+        # CPF não encontrado
+        logger.warning(
+            f"cliente_update_not_found cpf={cpf}",
+            extra={"event": "cliente_update_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Sucesso na atualização
+    logger.info(
+        f"cliente_update_success cpf={cpf}",
+        extra={"event": "cliente_update_success"},
+    )
+
+    return _doc_to_cliente_out(updated_doc)
+
+
 
 
 @app.delete("/clientes/{cpf}", status_code=204)
