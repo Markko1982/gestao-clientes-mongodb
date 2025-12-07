@@ -615,17 +615,27 @@ def criar_cliente(cliente: ClienteCreate):
 
 @app.delete("/clientes/{cpf}", status_code=204)
 def deletar_cliente(cpf: str):
-    """Inativa e marca o cliente para exclusão (soft delete)."""
-    res = _collection.update_one(
-        {"cpf": cpf},
-        {"$set": {"status": "inativo", "marcado_para_exclusao": True}},
+    """Remove um cliente pelo CPF."""
+    result = _collection.delete_one({"cpf": cpf})
+
+    if result.deleted_count == 0:
+        # Log estruturado quando não encontra o cliente para deletar
+        logger.warning(
+            f"cliente_delete_not_found cpf={cpf}",
+            extra={"event": "cliente_delete_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Log estruturado de sucesso na remoção
+    logger.info(
+        f"cliente_delete_success cpf={cpf}",
+        extra={"event": "cliente_delete_success"},
     )
-
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-
-    return Response(status_code=204)
-
+    # Para status_code=204, podemos simplesmente não retornar corpo
+    return
 
 @app.on_event("shutdown")
 def fechar_conexao_mongo():
