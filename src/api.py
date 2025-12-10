@@ -3,11 +3,13 @@ from pymongo.collection import ReturnDocument
 import pandas as pd
 from datetime import date
 from scripts.analise_clientes_pandas import carregar_clientes_dataframe
-from fastapi import FastAPI, HTTPException, Response, Query
+from fastapi import FastAPI, HTTPException, Response, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.errors import DuplicateKeyError
 
 from config import get_collection
+from logging_config import get_logger
+
 
 
 # Obter conexão com MongoDB (um único client para toda a API)
@@ -15,6 +17,8 @@ _bundle = get_collection()
 _client = _bundle.client
 _db = _bundle.db
 _collection = _bundle.collection
+logger = get_logger(__name__)
+
 
 
 class Endereco(BaseModel):
@@ -81,12 +85,56 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """
+    Middleware para logar todas as requisições HTTP em formato estruturado.
+    """
+    import time
+
+    start = time.perf_counter()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        status_code = getattr(response, "status_code", None)
+
+        logger.info(
+            "HTTP request",
+            extra={
+                "event": "http_request",
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "client_ip": request.client.host if request.client else None,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+
+
 @app.get("/health")
 def health_check():
     """Endpoint simples para verificar se a API e o Mongo estão OK."""
     try:
+        # Verifica se o MongoDB está respondendo
         _db.command("ping")
+
+        # Conta clientes não marcados para exclusão (ajuste se o seu filtro for outro)
         total = _collection.count_documents({"marcado_para_exclusao": {"$ne": True}})
+
+        # Log de sucesso estruturado
+        logger.info(
+            "health_check OK",
+            extra={
+                "event": "health_ok",
+                "database": _db.name,
+                "collection": _collection.name,
+                "total_clientes": total,
+            },
+        )
+
         return {
             "status": "ok",
             "database": _db.name,
@@ -94,17 +142,37 @@ def health_check():
             "total_clientes": total,
         }
     except Exception as e:
+        # Log de erro com stacktrace
+        logger.exception(
+            "health_check FAILED",
+            extra={"event": "health_error"},
+        )
+        # Aqui você decide se quer expor o erro ou não;
+        # por enquanto vamos devolver a mensagem para facilitar debug.
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/clientes/{cpf}", response_model=ClienteOut)
 def obter_cliente_por_cpf(cpf: str):
-    """Busca um cliente pelo CPF (11 dígitos)."""
-    doc = _collection.find_one(
-        {"cpf": cpf, "marcado_para_exclusao": {"$ne": True}}
-    )
+    """Obtém um cliente pelo CPF."""
+    doc = _collection.find_one({"cpf": cpf})
+
     if not doc:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        # Log estruturado quando não encontra o cliente
+        logger.warning(
+            f"cliente_get_not_found cpf={cpf}",
+            extra={"event": "cliente_get_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Log estruturado de sucesso na busca
+    logger.info(
+        f"cliente_get_success cpf={cpf}",
+        extra={"event": "cliente_get_success"},
+    )
     return _doc_to_cliente_out(doc)
 
 
@@ -533,7 +601,22 @@ def criar_cliente(cliente: ClienteCreate):
 
     try:
         result = _collection.insert_one(data)
+
+        # Log de sucesso da criação do cliente
+        logger.info(
+            f"cliente_create_success cpf={cliente.cpf} status={data.get('status')}",
+            extra={
+                "event": "cliente_create_success",
+            },
+        )
     except DuplicateKeyError:
+        # Log estruturado do conflito de CPF duplicado
+        logger.warning(
+            f"cliente_create_conflict cpf={cliente.cpf}",
+            extra={
+                "event": "cliente_create_conflict",
+            },
+        )
         raise HTTPException(
             status_code=409,
             detail="Já existe um cliente cadastrado com esse CPF.",
@@ -543,57 +626,75 @@ def criar_cliente(cliente: ClienteCreate):
     return _doc_to_cliente_out(doc)
 
 
-
 @app.patch("/clientes/{cpf}", response_model=ClienteOut)
-def atualizar_cliente(cpf: str, dados: ClienteUpdate):
-    """Atualiza parcialmente um cliente pelo CPF (patch)."""
+def atualizar_cliente(cpf: str, cliente_update: ClienteUpdate):
+    """Atualiza parcialmente um cliente pelo CPF."""
+    # Monta apenas os campos enviados no corpo da requisição
+    update_data = cliente_update.model_dump(exclude_unset=True)
 
-    # Monta só os campos que o usuário enviou
-    campos_para_atualizar = dados.model_dump(exclude_unset=True)
-
-    if not campos_para_atualizar:
+    if not update_data:
+        # Nada foi enviado para atualizar
+        logger.info(
+            f"cliente_update_no_fields cpf={cpf}",
+            extra={"event": "cliente_update_no_fields"},
+        )
         raise HTTPException(
             status_code=400,
-            detail="Nenhum dado enviado para atualização."
+            detail="Nenhum dado enviado para atualização.",
         )
 
-    # Faz o update e já pede o documento atualizado de volta
-    doc_atualizado = _collection.find_one_and_update(
+    # Executa o update e já retorna o documento atualizado
+    updated_doc = _collection.find_one_and_update(
         {"cpf": cpf},
-        {"$set": campos_para_atualizar},
+        {"$set": update_data},
         return_document=ReturnDocument.AFTER,
     )
 
-    if not doc_atualizado:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    if not updated_doc:
+        # CPF não encontrado
+        logger.warning(
+            f"cliente_update_not_found cpf={cpf}",
+            extra={"event": "cliente_update_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
 
-    # 🔴 IMPORTANTE: converter do formato Mongo para o formato da API
-    # (id como string, não expor _id bruto)
-    return {
-        "id": str(doc_atualizado["_id"]),
-        "cpf": doc_atualizado["cpf"],
-        "nome": doc_atualizado["nome"],
-        "email": doc_atualizado.get("email"),
-        "telefone": doc_atualizado.get("telefone"),
-        "status": doc_atualizado.get("status"),
-        "endereco": doc_atualizado.get("endereco"),
-        "data_nascimento": doc_atualizado.get("data_nascimento"),
-    }
+    # Sucesso na atualização
+    logger.info(
+        f"cliente_update_success cpf={cpf}",
+        extra={"event": "cliente_update_success"},
+    )
+
+    return _doc_to_cliente_out(updated_doc)
+
+
 
 
 @app.delete("/clientes/{cpf}", status_code=204)
 def deletar_cliente(cpf: str):
-    """Inativa e marca o cliente para exclusão (soft delete)."""
-    res = _collection.update_one(
-        {"cpf": cpf},
-        {"$set": {"status": "inativo", "marcado_para_exclusao": True}},
+    """Remove um cliente pelo CPF."""
+    result = _collection.delete_one({"cpf": cpf})
+
+    if result.deleted_count == 0:
+        # Log estruturado quando não encontra o cliente para deletar
+        logger.warning(
+            f"cliente_delete_not_found cpf={cpf}",
+            extra={"event": "cliente_delete_not_found"},
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
+
+    # Log estruturado de sucesso na remoção
+    logger.info(
+        f"cliente_delete_success cpf={cpf}",
+        extra={"event": "cliente_delete_success"},
     )
-
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-
-    return Response(status_code=204)
-
+    # Para status_code=204, podemos simplesmente não retornar corpo
+    return
 
 @app.on_event("shutdown")
 def fechar_conexao_mongo():

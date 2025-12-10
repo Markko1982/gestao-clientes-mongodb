@@ -22,11 +22,18 @@ def build_validator():
     """
     Monta o jsonSchema usado pelo MongoDB para validar documentos
     da coleção de clientes.
+
+    Regras principais:
+    - nome: obrigatório, string
+    - cpf: obrigatório, string com exatamente 11 dígitos numéricos
+    - status: obrigatório, apenas "ativo", "inativo" ou "excluido"
+    - endereco: obrigatório, com campos estado e cidade como strings
     """
     return {
         "$jsonSchema": {
             "bsonType": "object",
-            "required": ["nome", "cpf", "email", "telefone", "status", "endereco"],
+            # Campos obrigatórios mínimos
+            "required": ["nome", "cpf", "status", "endereco"],
             "properties": {
                 "nome": {
                     "bsonType": "string",
@@ -37,12 +44,13 @@ def build_validator():
                     "pattern": "^[0-9]{11}$",
                     "description": "CPF com exatamente 11 dígitos numéricos.",
                 },
-
+                # Mantemos data_nascimento opcional, mas validada quando vier
                 "data_nascimento": {
-                "bsonType": ["string", "null"],
-                "description": "Data de nascimento no formato YYYY-MM-DD ou null.",
-                "pattern": r"^\d{4}-\d{2}-\d{2}$",
+                    "bsonType": ["string", "null"],
+                    "description": "Data de nascimento no formato YYYY-MM-DD ou null.",
+                    "pattern": r"^\d{4}-\d{2}-\d{2}$",
                 },
+                # Outros campos continuam existindo, mas não são 'required'
                 "email": {
                     "bsonType": "string",
                     "description": "E-mail do cliente (texto simples; validação mais forte fica na aplicação).",
@@ -53,23 +61,37 @@ def build_validator():
                 },
                 "status": {
                     "bsonType": "string",
-                    "enum": ["ativo", "inativo"],
-                    "description": "Status do cliente (apenas 'ativo' ou 'inativo').",
+                    "enum": ["ativo", "inativo", "excluido"],
+                    "description": "Status do cliente (ativo, inativo ou excluido).",
                 },
                 "endereco": {
                     "bsonType": "object",
-                    "description": "Endereço completo do cliente (rua, numero, cidade, estado, cep...).",
+                    "description": "Endereço completo do cliente.",
+                    # Garante que estado e cidade existem e são strings
+                    "required": ["estado", "cidade"],
+                    "properties": {
+                        "estado": {
+                            "bsonType": "string",
+                            "description": "UF do estado (ex: SP, RJ).",
+                        },
+                        "cidade": {
+                            "bsonType": "string",
+                            "description": "Nome da cidade.",
+                        },
+                    },
+                    # Permitimos outros campos dentro de endereco (rua, cep etc.)
+                    "additionalProperties": True,
                 },
-                # Exemplo de campo opcional extra:
                 "data_cadastro": {
                     "bsonType": ["date", "null"],
                     "description": "Data de cadastro; se informado, deve ser um Date ou null.",
                 },
             },
-            # Permitimos outros campos além dos descritos acima.
+            # Permitimos outros campos além dos descritos acima no documento raiz.
             "additionalProperties": True,
         }
     }
+
 
 
 def show_current_validator(db, collection_name: str):

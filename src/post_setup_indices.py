@@ -5,6 +5,7 @@ Pode ser executado sempre que o ambiente subir:
 
     python -m src.post_setup_indices
 """
+
 from pymongo import ASCENDING
 from pymongo.errors import PyMongoError
 
@@ -51,7 +52,7 @@ def ensure_indexes():
         )
         print("✓ Índice em endereco.estado + endereco.cidade garantido (estado_cidade_1)")
 
-        # 🔥 Índice composto pensado para o endpoint GET /clientes
+        # Índice composto pensado para o endpoint GET /clientes
         # Filtro típico: status, estado, cidade
         # Ordenação: nome ASC
         col.create_index(
@@ -70,7 +71,6 @@ def ensure_indexes():
     finally:
         bundle.client.close()
         print("✓ Conexão com MongoDB fechada")
-
 
 
 if __name__ == "__main__":
