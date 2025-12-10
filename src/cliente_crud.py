@@ -145,6 +145,19 @@ class ClienteCRUD:
             print(f"✗ Erro ao deletar cliente: {e}")
             return False
 
+    def deletar_cliente(self, cpf: str) -> bool:
+        """
+        Alias para `deletar_por_cpf` usado nos menus legados.
+
+        Mantém compatibilidade com chamadas existentes no menu principal,
+        encaminhando para a deleção física do registro pelo CPF.
+        """
+        return self.deletar_por_cpf(cpf)
+
+    def inativar_cliente(self, cpf: str) -> bool:
+        """Marca o cliente como inativo pelo CPF."""
+        return self.atualizar_cliente(cpf, {"status": "inativo"})
+
     def atualizar_cliente(self, cpf: str, novos_dados: dict) -> bool:
         """
         Atualiza dados de um cliente (apenas se NÃO estiver marcado_para_exclusao).
