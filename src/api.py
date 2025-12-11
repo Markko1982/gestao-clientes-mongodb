@@ -7,6 +7,16 @@ from fastapi import FastAPI, HTTPException, Response, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.errors import DuplicateKeyError
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import status
+from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from fastapi.requests import Request
+from fastapi.exception_handlers import request_validation_exception_handler
+
+
+
 from config import get_collection
 from logging_config import get_logger
 
@@ -83,6 +93,18 @@ app = FastAPI(
     version="0.1.0",
     description="API REST simples para gestão de clientes usando MongoDB.",
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": "Payload inválido para criação de cliente.",
+            "errors": exc.errors(),
+        },
+    )
+
 
 
 @app.middleware("http")
