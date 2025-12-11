@@ -157,3 +157,31 @@ def test_listar_clientes_filtrando_por_status_e_localizacao(client, mongo_collec
     assert payload_ativo_sp["cpf"] in cpfs
     # Não deve conter o cliente inativo de RJ
     assert payload_inativo_rj["cpf"] not in cpfs
+
+
+def test_criar_cliente_payload_invalido_schema_jsonschema(client, mongo_collection, limpar_colecao):
+    """
+    Deve retornar 400 e não inserir nada quando o payload viola o schema do Mongo (ex: campo obrigatório faltando)
+    """
+    # Payload válido, mas removendo o campo 'telefone'
+    cliente_invalido = {
+        "nome": "João Teste",
+        "cpf": "12345678901",
+        "email": "joao.teste@email.com",
+        "status": "ativo",
+        "data_nascimento": "1990-01-01",
+        "endereco": {
+            "estado": "SP",
+            "cidade": "São Paulo",
+            "bairro": "Centro",
+            "logradouro": "Rua Exemplo",
+            "numero": 123,
+            "cep": "12345678"
+        }
+        # "telefone" está faltando!
+    }
+
+    response = client.post("/clientes", json=cliente_invalido)
+    assert response.status_code == 400
+    assert "schema" in response.json()["detail"].lower() or "payload" in response.json()["detail"].lower()
+    assert mongo_collection.count_documents({}) == 0
