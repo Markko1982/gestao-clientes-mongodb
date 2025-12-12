@@ -1,18 +1,15 @@
-from pathlib import Path
-import sys
-
-# Garante que o diretório raiz esteja no sys.path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 from config import get_collection
 
 
 def main():
-    col = get_collection()
+    bundle = get_collection()
+    col = bundle.collection  # pega a collection de dentro do bundle
 
     um = col.find_one()
+    if not um:
+        print("Nenhum documento encontrado na coleção 'clientes'.")
+        return
+
     print("Um cliente qualquer:")
     print(um)
     print("\nCampos:", list(um.keys()))
@@ -26,3 +23,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
