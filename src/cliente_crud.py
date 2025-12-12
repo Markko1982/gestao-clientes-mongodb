@@ -1,21 +1,11 @@
 from typing import List, Optional
-from pathlib import Path
-import sys
-
-# Ajuste de caminhos:
-# - adiciona raiz do projeto (onde está config.py)
-# - adiciona a pasta src (onde está cliente_model.py)
-ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src"
-for p in (ROOT, SRC):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
 
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError
 
-from cliente_model import Cliente  # src/cliente_model.py
-from config import MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_NAME  # type: ignore
+from .cliente_model import Cliente
+from config import MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_CLIENTES, MONGO_COLLECTION_NAME  # type: ignore
+
 
 
 class ClienteCRUD:
