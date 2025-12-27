@@ -16,10 +16,8 @@ from fastapi.requests import Request
 from fastapi.exception_handlers import request_validation_exception_handler
 
 
-
 from config import get_collection
 from logging_config import get_logger
-
 
 
 # Obter conexão com MongoDB (um único client para toda a API)
@@ -28,7 +26,6 @@ _client = _bundle.client
 _db = _bundle.db
 _collection = _bundle.collection
 logger = get_logger(__name__)
-
 
 
 class Endereco(BaseModel):
@@ -104,7 +101,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "errors": exc.errors(),
         },
     )
-
 
 
 @app.middleware("http")
@@ -244,15 +240,13 @@ def listar_clientes(
 
     cursor = (
         _collection.find(filtro)
-        .sort("nome", 1)   # ordena por nome ascendente
-        .skip(offset)      # paginação: pula 'offset' registros
-        .limit(limit)      # pega no máximo 'limit' registros
+        .sort("nome", 1)  # ordena por nome ascendente
+        .skip(offset)  # paginação: pula 'offset' registros
+        .limit(limit)  # pega no máximo 'limit' registros
     )
 
     # Aproveitar o helper que você já tem (_doc_to_cliente_out)
-    clientes: List[ClienteOut] = [
-        _doc_to_cliente_out(doc) for doc in cursor
-    ]
+    clientes: List[ClienteOut] = [_doc_to_cliente_out(doc) for doc in cursor]
 
     return clientes
 
@@ -277,15 +271,15 @@ def relatorio_faixa_etaria():
     # Calcula idade em anos (aprox.)
     df["idade"] = ((hoje - df["data_nascimento"]).dt.days / 365.25).astype("float")
 
-        # Mantém só quem tem idade válida (não nula, não NaN)
+    # Mantém só quem tem idade válida (não nula, não NaN)
     df_validos = df[df["idade"].notna()]
 
     if df_validos.empty:
-            return {
-                "mensagem": "Nenhum cliente com data_nascimento válida.",
-                "total_clientes": 0,
-                "faixas": [],
-            }
+        return {
+            "mensagem": "Nenhum cliente com data_nascimento válida.",
+            "total_clientes": 0,
+            "faixas": [],
+        }
 
     # Define as faixas etárias (mesma ideia dos relatórios em Pandas)
     bins = [0, 18, 26, 36, 51, 66, 200]
@@ -338,8 +332,7 @@ def relatorio_faixa_etaria():
 
         # Agrupa por estado + cidade e conta quantos inativos há em cada combinação
         agrupado = (
-            df_inativos
-            .groupby(["estado", "cidade"])
+            df_inativos.groupby(["estado", "cidade"])
             .size()
             .reset_index(name="quantidade_inativos")
             .sort_values(by="quantidade_inativos", ascending=False)
@@ -363,7 +356,6 @@ def relatorio_faixa_etaria():
             "cidades": top_cidades,
         }
 
-
     # Contagem por faixa
     tabela = (
         df_validos["faixa_etaria"]
@@ -385,6 +377,7 @@ def relatorio_faixa_etaria():
         "faixas": faixas,
     }
 
+
 @app.get("/relatorios/dominios-email")
 async def relatorio_dominios_email():
     """
@@ -398,7 +391,7 @@ async def relatorio_dominios_email():
     if "email" not in df.columns:
         raise HTTPException(
             status_code=500,
-            detail="Coluna 'email' não encontrada no DataFrame de clientes."
+            detail="Coluna 'email' não encontrada no DataFrame de clientes.",
         )
 
     # Limpa e-mails vazios ou nulos
@@ -407,17 +400,11 @@ async def relatorio_dominios_email():
 
     if df.empty:
         raise HTTPException(
-            status_code=404,
-            detail="Nenhum cliente com e-mail definido."
+            status_code=404, detail="Nenhum cliente com e-mail definido."
         )
 
     # Extrai o domínio do e-mail (parte depois do @)
-    df["dominio_email"] = (
-        df["email"]
-        .str.split("@").str[-1]
-        .str.lower()
-        .str.strip()
-    )
+    df["dominio_email"] = df["email"].str.split("@").str[-1].str.lower().str.strip()
 
     # Conta quantos clientes por domínio
     contagem_dominios = df["dominio_email"].value_counts()
@@ -442,6 +429,7 @@ async def relatorio_dominios_email():
         "total_clientes_com_email": total_com_email,
         "top_dominios": top_dominios,
     }
+
 
 @app.get("/relatorios/cidades-inativos")
 async def relatorio_cidades_inativos(
@@ -472,9 +460,7 @@ async def relatorio_cidades_inativos(
 
     # Tabela status por cidade/estado
     tabela_cidade_status = (
-        df.groupby(["estado", "cidade", "status"])
-        .size()
-        .unstack(fill_value=0)
+        df.groupby(["estado", "cidade", "status"]).size().unstack(fill_value=0)
     )
 
     # Garante colunas 'ativo' e 'inativo' existindo
@@ -534,6 +520,8 @@ async def relatorio_cidades_inativos(
         "total_cidades_no_ranking": len(cidades),
         "cidades": cidades,
     }
+
+
 @app.get("/relatorios/status-por-estado")
 async def relatorio_status_por_estado(min_clientes: int = 0):
     """
@@ -557,11 +545,7 @@ async def relatorio_status_por_estado(min_clientes: int = 0):
     df["estado"] = df["estado"].fillna("(sem estado)").str.strip().str.upper()
 
     # Agrupa por estado e status
-    tabela = (
-        df.groupby(["estado", "status"])
-        .size()
-        .unstack(fill_value=0)
-    )
+    tabela = df.groupby(["estado", "status"]).size().unstack(fill_value=0)
 
     # Garante as colunas padrão
     if "ativo" not in tabela.columns:
@@ -692,31 +676,25 @@ def atualizar_cliente(cpf: str, cliente_update: ClienteUpdate):
     return _doc_to_cliente_out(updated_doc)
 
 
-
-
 @app.delete("/clientes/{cpf}", status_code=204)
 def deletar_cliente(cpf: str):
-    """Remove um cliente pelo CPF."""
-    result = _collection.delete_one({"cpf": cpf})
+    """
+    Soft delete de cliente pelo CPF.
+    O cliente NÃO é removido fisicamente do banco.
+    """
+    result = _collection.update_one(
+        {"cpf": cpf, "marcado_para_exclusao": {"$ne": True}},
+        {"$set": {"marcado_para_exclusao": True}},
+    )
 
-    if result.deleted_count == 0:
-        # Log estruturado quando não encontra o cliente para deletar
-        logger.warning(
-            f"cliente_delete_not_found cpf={cpf}",
-            extra={"event": "cliente_delete_not_found"},
-        )
+    if result.matched_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Cliente não encontrado.",
+            detail="Cliente não encontrado ou já excluído",
         )
 
-    # Log estruturado de sucesso na remoção
-    logger.info(
-        f"cliente_delete_success cpf={cpf}",
-        extra={"event": "cliente_delete_success"},
-    )
-    # Para status_code=204, podemos simplesmente não retornar corpo
-    return
+    return None
+
 
 @app.on_event("shutdown")
 def fechar_conexao_mongo():
