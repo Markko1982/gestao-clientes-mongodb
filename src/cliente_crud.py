@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError
+from datetime import datetime
 
 from .cliente_model import Cliente
 from config import MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_CLIENTES, MONGO_COLLECTION_NAME  # type: ignore
@@ -115,25 +116,37 @@ class ClienteCRUD:
             print(f"✗ Erro ao listar clientes: {e}")
             return []
 
+  
+
     def deletar_por_cpf(self, cpf: str) -> bool:
         """
-        Remove fisicamente um cliente pelo CPF.
-
-        (Aqui NÃO aplicamos _filtro_nao_excluido de propósito:
-         se o usuário pedir para excluir um CPF, removemos o registro
-         correspondente, que é único pelo índice em cpf.)
+        Aplica soft delete em um cliente pelo CPF.
+        O cliente NÃO é removido fisicamente do banco.
+        Apenas marcamos como excluído.
         """
         try:
-            resultado = self.colecao.delete_one({"cpf": cpf})
-            if resultado.deleted_count > 0:
-                print(f"✓ Cliente com CPF {cpf} removido com sucesso")
-                return True
-            else:
-                print(f"✗ Cliente com CPF {cpf} não encontrado")
+            resultado = self.colecao.update_one(
+                {
+                    "cpf": cpf,
+                    "marcado_para_exclusao": {"$ne": True}
+                },
+                {
+                    "$set": {"marcado_para_exclusao": True}
+                }
+            )
+
+            if resultado.matched_count == 0:
+                print(f"✗ Cliente com CPF {cpf} não encontrado ou já excluído")
                 return False
+
+            print(f"✓ Cliente com CPF {cpf} marcado para exclusão (soft delete)")
+            return True
+
         except Exception as e:
-            print(f"✗ Erro ao deletar cliente: {e}")
+            print(f"✗ Erro ao aplicar soft delete no cliente: {e}")
             return False
+
+
 
     def atualizar_cliente(self, cpf: str, novos_dados: dict) -> bool:
         """
