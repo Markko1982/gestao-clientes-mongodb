@@ -37,10 +37,12 @@ MONGO_URI: str = _get_env("MONGO_URI", required=True)
 
 # Nome do banco e da coleção padrão (podem ter default razoável)
 MONGO_DB_NAME: str = _get_env("MONGO_DB_NAME", default="empresa_db")
-MONGO_COLLECTION_CLIENTES: str = _get_env("MONGO_COLLECTION_CLIENTES", default="clientes")
+MONGO_COLLECTION_CLIENTES: str = _get_env(
+    "MONGO_COLLECTION_CLIENTES", default="clientes"
+)
 
 # Alias para compatibilidade com código antigo
-MONGO_COLLECTION_NAME: str = MONGO_COLLECTION_CLIENTES
+
 
 logger = get_logger(__name__)
 
