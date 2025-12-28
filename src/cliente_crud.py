@@ -5,8 +5,7 @@ from pymongo.errors import DuplicateKeyError
 from datetime import datetime
 
 from .cliente_model import Cliente
-from config import MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_CLIENTES, MONGO_COLLECTION_NAME  # type: ignore
-
+from config import MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_CLIENTES  # type: ignore
 
 
 class ClienteCRUD:
@@ -29,7 +28,7 @@ class ClienteCRUD:
 
         self.cliente_mongo = MongoClient(uri)
         self.db = self.cliente_mongo[MONGO_DB_NAME]
-        self.colecao = self.db[MONGO_COLLECTION_NAME]
+        self.colecao = self.db[MONGO_COLLECTION_CLIENTES]
 
         # Índice único em CPF (idempotente)
         self.colecao.create_index("cpf", unique=True)
@@ -59,7 +58,9 @@ class ClienteCRUD:
         """Insere um novo cliente na coleção."""
         try:
             resultado = self.colecao.insert_one(cliente.to_dict())
-            print(f"✓ Cliente {cliente.nome} cadastrado com ID: {resultado.inserted_id}")
+            print(
+                f"✓ Cliente {cliente.nome} cadastrado com ID: {resultado.inserted_id}"
+            )
             return True
         except DuplicateKeyError:
             print(f"✗ Erro: CPF {cliente.cpf} já cadastrado!")
@@ -116,8 +117,6 @@ class ClienteCRUD:
             print(f"✗ Erro ao listar clientes: {e}")
             return []
 
-  
-
     def deletar_por_cpf(self, cpf: str) -> bool:
         """
         Aplica soft delete em um cliente pelo CPF.
@@ -126,13 +125,8 @@ class ClienteCRUD:
         """
         try:
             resultado = self.colecao.update_one(
-                {
-                    "cpf": cpf,
-                    "marcado_para_exclusao": {"$ne": True}
-                },
-                {
-                    "$set": {"marcado_para_exclusao": True}
-                }
+                {"cpf": cpf, "marcado_para_exclusao": {"$ne": True}},
+                {"$set": {"marcado_para_exclusao": True}},
             )
 
             if resultado.matched_count == 0:
@@ -146,8 +140,6 @@ class ClienteCRUD:
             print(f"✗ Erro ao aplicar soft delete no cliente: {e}")
             return False
 
-
-
     def atualizar_cliente(self, cpf: str, novos_dados: dict) -> bool:
         """
         Atualiza dados de um cliente (apenas se NÃO estiver marcado_para_exclusao).
@@ -159,7 +151,9 @@ class ClienteCRUD:
                 print(f"✓ Cliente com CPF {cpf} atualizado com sucesso")
                 return True
             else:
-                print(f"✗ Cliente com CPF {cpf} não encontrado ou marcado para exclusão")
+                print(
+                    f"✗ Cliente com CPF {cpf} não encontrado ou marcado para exclusão"
+                )
                 return False
         except Exception as e:
             print(f"✗ Erro ao atualizar cliente: {e}")
@@ -217,7 +211,6 @@ class ClienteCRUD:
         """
         return self.deletar_por_cpf(cpf)
 
-
     def inativar_cliente(self, cpf: str) -> bool:
         """
         Marca o cliente como inativo (status = 'inativo').
@@ -226,4 +219,3 @@ class ClienteCRUD:
         o filtro de 'marcado_para_exclusao'.
         """
         return self.atualizar_cliente(cpf, {"status": "inativo"})
-
