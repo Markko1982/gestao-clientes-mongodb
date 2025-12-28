@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.requests import Request
 from fastapi.exception_handlers import request_validation_exception_handler
+from contextlib import asynccontextmanager
 
 
 from config import get_collection
@@ -85,10 +86,20 @@ def _doc_to_cliente_out(doc) -> ClienteOut:
     )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP (se no futuro precisar)
+    yield
+    # SHUTDOWN (equivalente ao on_event("shutdown"))
+    if hasattr(app.state, "mongo_client"):
+        app.state.mongo_client.close()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="API de Clientes - MongoDB",
     version="0.1.0",
-    description="API REST simples para gestão de clientes usando MongoDB.",
+    description="...",
 )
 
 
@@ -694,9 +705,3 @@ def deletar_cliente(cpf: str):
         )
 
     return None
-
-
-@app.on_event("shutdown")
-def fechar_conexao_mongo():
-    """Garante que o client do Mongo seja fechado ao desligar a API."""
-    _client.close()
